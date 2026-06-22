@@ -1,2 +1,5 @@
 # OMXH25-Dasboard
-# Dashboard OMXH25 yhtöille
+
+School project for analyzing OMXH25 companies with Python and Streamlit.
+
+## Run locally
