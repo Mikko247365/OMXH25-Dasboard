@@ -36,8 +36,8 @@ end_date = datetime.datetime.now().date()
 def get_price_data(companies, start=start_date, end=end_date):
     all_data = {}
     
-    for name, info in companies.items():
-        ticker = info["ticker"]
+    for name, price in companies.items():
+        ticker = price["ticker"]
         stock = yf.Ticker(ticker)
         data = stock.history(start=start, end=end)
         
@@ -46,10 +46,22 @@ def get_price_data(companies, start=start_date, end=end_date):
     return all_data
 
 #Haetaan infodata
-def get_info_data(companies, start=start_date, end=end_date):
-    pass
-
+def get_info_data(companies):
+    all_data = []
+    
+    for name, info in companies.items():
+        ticker = info["ticker"]
+        stock = yf.Ticker(ticker)
+        data = stock.info.get("sector")
+        
+        all_data.append({
+            "Yritys": name,
+            "Sektori": data
+        })
+    
+    return pd.DataFrame(all_data)
 
 if __name__ == "__main__":
-    data = get_price_data(companies)
-    print(data["QT Group"].head())
+    price = get_price_data(companies)
+    info = get_info_data(companies)
+    print(info)
