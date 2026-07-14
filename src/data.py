@@ -33,6 +33,7 @@ companies = {
 start_date = "2024-01-01"
 end_date = datetime.datetime.now().date()
 
+#Haetaan kurssikehitys
 def get_price_data(companies, start=start_date, end=end_date):
     all_data = {}
     
@@ -61,7 +62,13 @@ def get_info_data(companies):
     
     return pd.DataFrame(all_data)
 
+def get_incomestmt_data(companies):
+    pass
+
 if __name__ == "__main__":
     price = get_price_data(companies)
     info = get_info_data(companies)
-    print(info)
+    # print(info)
+    
+    ticker = yf.Ticker("QTCOM.HE")
+    print(ticker.income_stmt.loc["Net Income"])
