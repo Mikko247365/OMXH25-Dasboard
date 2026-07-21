@@ -3,3 +3,4 @@ __pyache__/
 *.pyc
 .env
 .DS-Store
+.vscode/settings.json
