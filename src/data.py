@@ -2,7 +2,8 @@ import yfinance as yf
 import pandas as pd
 import datetime
 
-companies = {
+#Yhtiöt
+COMPANIES = {
     "Nokia": {"ticker": "NOKIA.HE"},
     "Nordea": {"ticker": "NDA-FI.HE"},
     "Sampo": {"ticker": "SAMPO.HE"},
@@ -30,6 +31,21 @@ companies = {
     "QT Group" : {"ticker": "QTCOM.HE"}
 }
 
+#Toimialojen suomennokset
+SECTOR_TRANSLATIONS = {
+    "Technology": "Teknologia",
+    "Financial Services": "Rahoituspalvelut",
+    "Industrials": "Teollisuustuotteet ja -palvelut",
+    "Consumer Defensive": "Päivittäistavarat",
+    "Consumer Cyclical": "Kestokulutustavarat",
+    "Basic Materials": "Perusteollisuus & Materiaalit",
+    "Energy": "Energia",
+    "Utilities": "Yhdyskuntatekniikka & Hyödykkeet",
+    "Healthcare": "Terveydenhuolto",
+    "Real Estate": "Kiinteistöala",
+    "Communication Services": "Viestintäpalvelut"
+}
+
 start_date = "2024-01-01"
 end_date = datetime.datetime.now().date()
 
@@ -48,18 +64,19 @@ def get_price_data(companies, start=start_date, end=end_date):
         
     return pd.concat(all_data, ignore_index=True)
 
-#Haetaan infodata
+#Haetaan sektorit
 def get_info_data(companies):
     all_data = []
     
     for name, info in companies.items():
         ticker = info["ticker"]
         stock = yf.Ticker(ticker)
-        data = stock.info.get("sector")
+        data_sector = stock.info.get("sector")
+        sector = SECTOR_TRANSLATIONS.get(data_sector, data_sector)
         
         all_data.append({
             "Yritys": name,
-            "Sektori": data
+            "Sektori": sector
         })
     
     return pd.DataFrame(all_data)
@@ -139,15 +156,21 @@ def get_income_stmt(companies):
     return pd.DataFrame(all_data)
 
 if __name__ == "__main__":
-    price = get_price_data(companies)
-    info = get_info_data(companies)
-    keyfigures = get_keyfigures_data(companies)
-    quarters = get_quarterly_stmt(companies)
-    yearly = get_income_stmt(companies)
+    price = get_price_data(COMPANIES)
+    info = get_info_data(COMPANIES)
+    keyfigures = get_keyfigures_data(COMPANIES)
+    quarters = get_quarterly_stmt(COMPANIES)
+    yearly = get_income_stmt(COMPANIES)
     
     ticker = yf.Ticker("QTCOM.HE")
     
     df = pd.DataFrame([ticker.info])
-    # print(ticker.quarterly_income_stmt)
+    qtrt = ticker.quarterly_income_stmt
     
-    print(yearly)
+    # print(qtrt.info())
+    
+    # print(quarters[quarters["Yritys"]== "Nokia"])
+    
+    print(info)
+    
+    # print(yearly)
