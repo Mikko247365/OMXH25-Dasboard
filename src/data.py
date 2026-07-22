@@ -102,15 +102,15 @@ def get_keyfigures_data(companies):
         all_data.append({
             "Yritys": name,
             "Trailing P/E": trailingpe,
-            "Forward PE": forwardpe,
-            "Marketcap": marketcap,
+            "Forward P/E": forwardpe,
+            "Marketcap": marketcap / 1000000,
             "MA50": avg50,
             "MA200": avg200,
             "P/B": pb,
             "EPS Current year": epscurrent,
             "Trailing EPS": trailingeps,
             "Forward EPS": forwardeps,
-            "Trailing PS": trailingps
+            "Trailing P/S": trailingps
         })
     
     return pd.DataFrame(all_data)
@@ -125,11 +125,13 @@ def get_quarterly_stmt(companies):
         stmt = stock.quarterly_income_stmt
         
         for quarter in stmt.columns:
+            q_num = ((quarter.month - 1) // 3) + 1
+            formated_q = f"{quarter.year}Q{q_num}"
             all_data.append({
                 "Yritys": name,
-                "Neljännes": quarter,
-                "Liikevaihto": stmt.loc["Total Revenue", quarter] if "Total Revenue" in stmt.index else None,
-                "Nettotulos": stmt.loc["Net Income", quarter] if "Net Income" in stmt.index else None,
+                "Kvarttaali": formated_q,
+                "Liikevaihto": stmt.loc["Total Revenue", quarter] / 1000000 if "Total Revenue" in stmt.index else None,
+                "Nettotulos": stmt.loc["Net Income", quarter] / 1000000 if "Net Income" in stmt.index else None,
                 "EPS": stmt.loc["Basic EPS", quarter] if "Basic EPS" in stmt.index else None
             })
             
@@ -148,8 +150,8 @@ def get_income_stmt(companies):
             all_data.append({
                 "Yritys": name,
                 "Vuosi": year,
-                "Liikevaihto": stmt.loc["Total Revenue", year] if "Total Revenue" in stmt.index else None,
-                "Nettotulos": stmt.loc["Net Income", year] if "Net Income" in stmt.index else None,
+                "Liikevaihto": stmt.loc["Total Revenue", year] / 1000000 if "Total Revenue" in stmt.index else None,
+                "Nettotulos": stmt.loc["Net Income", year]  / 1000000 if "Net Income" in stmt.index else None,
                 "EPS": stmt.loc["Basic EPS", year] if "Basic EPS" in stmt.index else None
             })
             
@@ -171,6 +173,6 @@ if __name__ == "__main__":
     
     # print(quarters[quarters["Yritys"]== "Nokia"])
     
-    print(info)
+    print(keyfigures)
     
     # print(yearly)
