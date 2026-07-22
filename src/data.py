@@ -60,6 +60,7 @@ def get_price_data(companies, start=start_date, end=end_date):
         
         data.reset_index(level=0, inplace=True)
         data["Yritys"] = name
+        data["Date"] = data["Date"].dt.tz_localize(None)
         all_data.append(data)
         
     return pd.concat(all_data, ignore_index=True)
@@ -146,13 +147,14 @@ def get_income_stmt(companies):
         stock = yf.Ticker(ticker)
         stmt = stock.income_stmt
         
-        for year in stmt.columns:
+        for yearly in stmt.columns:
+            year_formated = yearly.year
             all_data.append({
                 "Yritys": name,
-                "Vuosi": year,
-                "Liikevaihto": stmt.loc["Total Revenue", year] / 1000000 if "Total Revenue" in stmt.index else None,
-                "Nettotulos": stmt.loc["Net Income", year]  / 1000000 if "Net Income" in stmt.index else None,
-                "EPS": stmt.loc["Basic EPS", year] if "Basic EPS" in stmt.index else None
+                "Vuosi": year_formated,
+                "Liikevaihto": stmt.loc["Total Revenue", yearly] / 1000000 if "Total Revenue" in stmt.index else None,
+                "Nettotulos": stmt.loc["Net Income", yearly]  / 1000000 if "Net Income" in stmt.index else None,
+                "EPS": stmt.loc["Basic EPS", yearly] if "Basic EPS" in stmt.index else None
             })
             
     return pd.DataFrame(all_data)
@@ -173,6 +175,6 @@ if __name__ == "__main__":
     
     # print(quarters[quarters["Yritys"]== "Nokia"])
     
-    print(keyfigures)
+    print(yearly)
     
     # print(yearly)
