@@ -1,0 +1,9 @@
+[theme]
+textColor = "darkGoldenrod"
+font = "Aptos"
+headingFont = "Aptos"
+codeFont = "Aptos"
+[theme.sidebar]
+font = "Aptos"
+headingFont = "Aptos"
+codeFont = "Aptos"
