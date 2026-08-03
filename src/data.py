@@ -2,7 +2,8 @@ import yfinance as yf
 import pandas as pd
 import datetime
 
-companies = {
+#Yhtiöt
+COMPANIES = {
     "Nokia": {"ticker": "NOKIA.HE"},
     "Nordea": {"ticker": "NDA-FI.HE"},
     "Sampo": {"ticker": "SAMPO.HE"},
@@ -30,6 +31,21 @@ companies = {
     "QT Group" : {"ticker": "QTCOM.HE"}
 }
 
+#Toimialojen suomennokset
+SECTOR_TRANSLATIONS = {
+    "Technology": "Teknologia",
+    "Financial Services": "Rahoituspalvelut",
+    "Industrials": "Teollisuustuotteet ja -palvelut",
+    "Consumer Defensive": "Päivittäistavarat",
+    "Consumer Cyclical": "Kestokulutustavarat",
+    "Basic Materials": "Perusteollisuus & Materiaalit",
+    "Energy": "Energia",
+    "Utilities": "Yhdyskuntatekniikka & Hyödykkeet",
+    "Healthcare": "Terveydenhuolto",
+    "Real Estate": "Kiinteistöala",
+    "Communication Services": "Viestintäpalvelut"
+}
+
 start_date = "2024-01-01"
 end_date = datetime.datetime.now().date()
 
@@ -44,22 +60,24 @@ def get_price_data(companies, start=start_date, end=end_date):
         
         data.reset_index(level=0, inplace=True)
         data["Yritys"] = name
+        data["Date"] = data["Date"].dt.tz_localize(None)
         all_data.append(data)
         
     return pd.concat(all_data, ignore_index=True)
 
-#Haetaan infodata
+#Haetaan sektorit
 def get_info_data(companies):
     all_data = []
     
     for name, info in companies.items():
         ticker = info["ticker"]
         stock = yf.Ticker(ticker)
-        data = stock.info.get("sector")
+        data_sector = stock.info.get("sector")
+        sector = SECTOR_TRANSLATIONS.get(data_sector, data_sector)
         
         all_data.append({
             "Yritys": name,
-            "Sektori": data
+            "Sektori": sector
         })
     
     return pd.DataFrame(all_data)
@@ -85,15 +103,15 @@ def get_keyfigures_data(companies):
         all_data.append({
             "Yritys": name,
             "Trailing P/E": trailingpe,
-            "Forward PE": forwardpe,
-            "Marketcap": marketcap,
+            "Forward P/E": forwardpe,
+            "Marketcap": marketcap / 1000000,
             "MA50": avg50,
             "MA200": avg200,
             "P/B": pb,
             "EPS Current year": epscurrent,
             "Trailing EPS": trailingeps,
             "Forward EPS": forwardeps,
-            "Trailing PS": trailingps
+            "Trailing P/S": trailingps
         })
     
     return pd.DataFrame(all_data)
@@ -108,11 +126,13 @@ def get_quarterly_stmt(companies):
         stmt = stock.quarterly_income_stmt
         
         for quarter in stmt.columns:
+            q_num = ((quarter.month - 1) // 3) + 1
+            formated_q = f"{quarter.year}Q{q_num}"
             all_data.append({
                 "Yritys": name,
-                "Neljännes": quarter,
-                "Liikevaihto": stmt.loc["Total Revenue", quarter] if "Total Revenue" in stmt.index else None,
-                "Nettotulos": stmt.loc["Net Income", quarter] if "Net Income" in stmt.index else None,
+                "Kvarttaali": formated_q,
+                "Liikevaihto": stmt.loc["Total Revenue", quarter] / 1000000 if "Total Revenue" in stmt.index else None,
+                "Nettotulos": stmt.loc["Net Income", quarter] / 1000000 if "Net Income" in stmt.index else None,
                 "EPS": stmt.loc["Basic EPS", quarter] if "Basic EPS" in stmt.index else None
             })
             
@@ -127,27 +147,34 @@ def get_income_stmt(companies):
         stock = yf.Ticker(ticker)
         stmt = stock.income_stmt
         
-        for year in stmt.columns:
+        for yearly in stmt.columns:
+            year_formated = yearly.year
             all_data.append({
                 "Yritys": name,
-                "Vuosi": year,
-                "Liikevaihto": stmt.loc["Total Revenue", year] if "Total Revenue" in stmt.index else None,
-                "Nettotulos": stmt.loc["Net Income", year] if "Net Income" in stmt.index else None,
-                "EPS": stmt.loc["Basic EPS", year] if "Basic EPS" in stmt.index else None
+                "Vuosi": year_formated,
+                "Liikevaihto": stmt.loc["Total Revenue", yearly] / 1000000 if "Total Revenue" in stmt.index else None,
+                "Nettotulos": stmt.loc["Net Income", yearly]  / 1000000 if "Net Income" in stmt.index else None,
+                "EPS": stmt.loc["Basic EPS", yearly] if "Basic EPS" in stmt.index else None
             })
             
     return pd.DataFrame(all_data)
 
 if __name__ == "__main__":
-    price = get_price_data(companies)
-    info = get_info_data(companies)
-    keyfigures = get_keyfigures_data(companies)
-    quarters = get_quarterly_stmt(companies)
-    yearly = get_income_stmt(companies)
+    price = get_price_data(COMPANIES)
+    info = get_info_data(COMPANIES)
+    keyfigures = get_keyfigures_data(COMPANIES)
+    quarters = get_quarterly_stmt(COMPANIES)
+    yearly = get_income_stmt(COMPANIES)
     
     ticker = yf.Ticker("QTCOM.HE")
     
     df = pd.DataFrame([ticker.info])
-    # print(ticker.quarterly_income_stmt)
+    qtrt = ticker.quarterly_income_stmt
+    
+    # print(qtrt.info())
+    
+    # print(quarters[quarters["Yritys"]== "Nokia"])
     
     print(yearly)
+    
+    # print(yearly)
