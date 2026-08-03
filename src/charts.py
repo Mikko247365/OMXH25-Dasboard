@@ -1,154 +1,238 @@
-import plotly.express as px
-import pandas as pd
 import streamlit as st
+import pandas as pd
+import plotly.express as px
 
-# Kaikkien toimialojen suomennokset
-SECTOR_TRANSLATIONS = {
-    "Technology": "Teknologia",
-    "Financial Services": "Rahoituspalvelut",
-    "Industrials": "Teollisuustuotteet ja -palvelut",
-    "Consumer Defensive": "Päivittäistavarat",
-    "Consumer Cyclical": "Kestokulutustavarat",
-    "Basic Materials": "Perusteollisuus & Materiaalit",
-    "Energy": "Energia",
-    "Utilities": "Yhdyskuntatekniikka & Hyödykkeet",
-    "Healthcare": "Terveydenhuolto",
-    "Real Estate": "Kiinteistöala",
-    "Communication Services": "Viestintäpalvelut"
-}
 
 # -------------------------------------------------------------
-# 1. Osakkeen hinnan kehitys (Viivagraafi)
+# 1. Kurssikehitys
 # -------------------------------------------------------------
 def plot_price_history(df_price, selected_companies):
-    filtered_df = df_price[df_price["Yritys"].isin(selected_companies)].copy()
-    date_col = "Date" if "Date" in filtered_df.columns else filtered_df.columns[0]
-    
+    df = df_price[df_price["Yritys"].isin(selected_companies)].copy()
+
     fig = px.line(
-        filtered_df,
-        x=date_col,
+        df,
+        x="Date",
         y="Close",
         color="Yritys",
-        title="Osakkeen päätöskurssin kehitys (€)"
+        title="Osakkeiden kurssikehitys valitulla aikavälillä"
     )
-    
+
     fig.update_layout(
-        xaxis_title="Päivämäärä",
-        yaxis_title="Päätöskurssi (€)",
         hovermode="x unified",
-        margin=dict(l=0, r=0, t=40, b=0)
+        xaxis_title="Päivämäärä",
+        yaxis_title="Kurssi (€)",
+        legend_title="Yhtiö",
+        template="plotly_white"
     )
+
     return fig
 
-# -------------------------------------------------------------
-# 2. Valittujen yhtiöiden yleiskatsaustaulukko
-# -------------------------------------------------------------
-def create_comparison_table(df_price, df_keyfigures, df_info, selected_companies):
-    comparison_list = []
-    
-    for company in selected_companies:
-        p_data = df_price[df_price["Yritys"] == company]
-        kf_data = df_keyfigures[df_keyfigures["Yritys"] == company]
-        inf_data = df_info[df_info["Yritys"] == company]
-        
-        if p_data.empty:
-            continue
-            
-        start_price = float(p_data["Close"].iloc[0])
-        end_price = float(p_data["Close"].iloc[-1])
-        high_price = float(p_data["Close"].max())
-        low_price = float(p_data["Close"].min())
-        change_pct = ((end_price - start_price) / start_price) * 100
-        
-        mcap = kf_data["Marketcap"].values[0] if not kf_data.empty else None
-        raw_sector = inf_data["Sektori"].values[0] if not inf_data.empty else "Ei tietoa"
-        sector_fi = SECTOR_TRANSLATIONS.get(raw_sector, raw_sector)
-        
-        comparison_list.append({
-            "Yhtiö": company,
-            "Toimiala": sector_fi,
-            "Viimeisin (€)": round(end_price, 2),
-            "Ylin (€)": round(high_price, 2),
-            "Alin (€)": round(low_price, 2),
-            "Kehitys (%)": round(change_pct, 2),
-            "Markkina-arvo": mcap  # Näytetään Mikon raakadata sellaisenaan
-        })
-        
-    return pd.DataFrame(comparison_list)
 
 # -------------------------------------------------------------
-# 3. Yhtiökohtaiset Avainmetriikat (KPIs)
+# 2. Yhtiöiden vertailutaulukko (Lajittelumahdollisuus mukana)
+# -------------------------------------------------------------
+def create_comparison_table(
+    df_price,
+    df_keyfigures,
+    df_info,
+    selected_companies,
+    sort_by="Muutos %",
+    ascending=False
+):
+    rows = []
+
+    for company in selected_companies:
+        prices = df_price[
+            df_price["Yritys"] == company
+        ].sort_values("Date")
+
+        valid_prices = prices["Close"].dropna()
+        if prices.empty:
+            continue
+
+        info = df_info[df_info["Yritys"] == company]
+        kf = df_keyfigures[df_keyfigures["Yritys"] == company]
+
+        start_price = valid_prices.iloc[0]
+        end_price = valid_prices.iloc[-1]
+
+        high = valid_prices.max()
+        low = valid_prices.min()
+
+        price_change_eur = end_price - start_price
+        change_pct = ((end_price - start_price) / start_price) * 100
+
+        sector = "-"
+        if not info.empty:
+            sector = info.iloc[0]["Sektori"]
+
+        marketcap = None
+        if not kf.empty:
+            marketcap = kf.iloc[0]["Marketcap"]
+
+        if pd.notnull(marketcap):
+            if marketcap >= 1000:
+                marketcap_text = f"{marketcap/1000:.2f} mrd €"
+            else:
+                marketcap_text = f"{marketcap:.0f} M€"
+        else:
+            marketcap_text = "-"
+
+        rows.append({
+            "Yhtiö": company,
+            "Toimiala": sector,
+            "Viimeisin (€)": round(end_price, 2),
+            "Ylin (€)": round(high, 2),
+            "Alin (€)": round(low, 2),
+            "Tuotto (€)": round(price_change_eur, 2),
+            "Muutos %": round(change_pct, 2),
+            "Markkina-arvo": marketcap_text,
+            "_raw_mcap": marketcap if pd.notnull(marketcap) else 0  # Piilotettu kenttä lajittelua varten
+        })
+
+    table = pd.DataFrame(rows)
+
+    if not table.empty:
+        # Lajittelu vaatimuksen 4e mukaisesti
+        if sort_by == "Markkina-arvo":
+            table = table.sort_values("_raw_mcap", ascending=ascending)
+        elif sort_by in table.columns:
+            table = table.sort_values(sort_by, ascending=ascending)
+        
+        # Poistetaan tekninen apusarake ennen näyttämistä
+        table = table.drop(columns=["_raw_mcap"])
+
+    return table
+
+
+# -------------------------------------------------------------
+# 3. Yhtiökohtaiset tunnusluvut (Osinko-% mukana)
 # -------------------------------------------------------------
 def render_company_kpis(company_name, df_price, df_keyfigures):
-    p_data = df_price[df_price["Yritys"] == company_name]
-    kf_data = df_keyfigures[df_keyfigures["Yritys"] == company_name]
-    
-    if p_data.empty or kf_data.empty:
-        st.warning("Tietoja ei löytynyt valitulle yhtiölle.")
+    price = (
+        df_price[df_price["Yritys"] == company_name]
+        .sort_values("Date")
+        .copy()
+    )
+
+    key = df_keyfigures[df_keyfigures["Yritys"] == company_name]
+
+    if price.empty or key.empty:
+        st.warning("Tietoja ei löytynyt.")
         return
 
-    start_p = float(p_data["Close"].iloc[0])
-    end_p = float(p_data["Close"].iloc[-1])
-    price_change = end_p - start_p
-    return_pct = ((end_p - start_p) / start_p) * 100
-    
+    latest = price["Close"].dropna().iloc[-1]
+    first = price["Close"].dropna().iloc[0]
+
+    highest = price["Close"].max()
+    lowest = price["Close"].min()
+
+    price_change_eur = latest - first
+    change_pct = ((latest - first) / first) * 100
+
+    pe = key["Trailing P/E"].iloc[0] if "Trailing P/E" in key.columns else None
+    pb = key["P/B"].iloc[0] if "P/B" in key.columns else None
+    ps = key["Trailing P/S"].iloc[0] if "Trailing P/S" in key.columns else None
+    div_yield = key["Dividend Yield"].iloc[0] if "Dividend Yield" in key.columns else None
+
+    ma50 = key["MA50"].iloc[0] if "MA50" in key.columns else None
+    ma200 = key["MA200"].iloc[0] if "MA200" in key.columns else None
+    marketcap = key["Marketcap"].iloc[0] if "Marketcap" in key.columns else None
+    eps = key["Trailing EPS"].iloc[0] if "Trailing EPS" in key.columns else None
+
+    # Ensimmäinen rivi: Kurssimuutokset
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Aloitushinta", f"{start_p:.2f} €")
-    c2.metric("Viimeisin hinta", f"{end_p:.2f} €")
-    c3.metric("Tuotto ajanjaksolla", f"{price_change:+.2f} €", delta=f"{return_pct:.2f} %")
-    
-    mcap = kf_data["Marketcap"].values[0]
-    c4.metric("Markkina-arvo", f"{mcap}" if pd.notnull(mcap) else "-")
-    
-    st.write("---")
-    
-    pe = kf_data["Trailing P/E"].values[0]
-    ps = kf_data["Trailing PS"].values[0]
-    ma50 = kf_data["MA50"].values[0]
-    ma200 = kf_data["MA200"].values[0]
-    
+    c1.metric("Viimeisin kurssi", f"{latest:.2f} €")
+    c2.metric("Ylin kurssi", f"{highest:.2f} €")
+    c3.metric("Alin kurssi", f"{lowest:.2f} €")
+    c4.metric("Tuotto valitulla aikavälillä", f"{price_change_eur:+.2f} €", delta=f"{change_pct:.2f} %")
+
+    st.divider()
+
+    # Toinen rivi: Valuaatiot ja Osinko-% (Vaatimus 6a, 6b, 6c)
     k1, k2, k3, k4 = st.columns(4)
-    k1.metric("P/E (Trailing)", f"{pe:.2f}" if pd.notnull(pe) else "-")
-    k2.metric("P/S (Trailing)", f"{ps:.2f}" if pd.notnull(ps) else "-")
-    k3.metric("MA50 (50pv KA)", f"{ma50:.2f} €" if pd.notnull(ma50) else "-")
-    k4.metric("MA200 (200pv KA)", f"{ma200:.2f} €" if pd.notnull(ma200) else "-")
+    k1.metric("P/E", "-" if pd.isna(pe) else f"{pe:.2f}")
+    k2.metric("P/S", "-" if pd.isna(ps) else f"{ps:.2f}")
+    
+    # Osinko-% muotoilu (YFinance antaa desimaalina esim. 0.045 -> 4.5 %)
+    if pd.notna(div_yield):
+        div_text = f"{div_yield * 100:.2f} %" if div_yield < 1 else f"{div_yield:.2f} %"
+    else:
+        div_text = "-"
+    k3.metric("Osinko %", div_text)
+
+    if pd.notna(marketcap):
+        if marketcap >= 1000:
+            marketcap_text = f"{marketcap/1000:.2f} mrd €"
+        else:
+            marketcap_text = f"{marketcap:.0f} M€"
+    else:
+        marketcap_text = "-"
+    k4.metric("Markkina-arvo", marketcap_text)
+
+    st.divider()
+
+    # Kolmas rivi: Muut tunnusluvut
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("P/B", "-" if pd.isna(pb) else f"{pb:.2f}")
+    m2.metric("MA50", "-" if pd.isna(ma50) else f"{ma50:.2f} €")
+    m3.metric("MA200", "-" if pd.isna(ma200) else f"{ma200:.2f} €")
+    m4.metric("EPS", "-" if pd.isna(eps) else f"{eps:.2f}")
+
 
 # -------------------------------------------------------------
-# 4. Kvartaalitulokset (Alkuperäisillä luvuilla)
+# 4. Kvartaalitulokset
 # -------------------------------------------------------------
 def render_quarterly_analysis(company_name, df_quarters):
-    company_q = df_quarters[df_quarters["Yritys"] == company_name].copy()
-    
-    if company_q.empty:
-        st.info("Kvartaalituloksia ei löytynyt tälle yhtiölle.")
+    company = df_quarters[df_quarters["Yritys"] == company_name].copy()
+
+    if company.empty:
+        st.info("Kvartaalituloksia ei löytynyt.")
         return
 
-    company_q["Kvartaali"] = pd.to_datetime(company_q["Neljännes"]).dt.to_period("Q").astype(str)
-    company_q = company_q.sort_values(by="Neljännes", ascending=True)
-    
-    # Käytetään Mikon sarakkeita sellaisenaan ilman jakolaskuja
-    display_df = pd.DataFrame({"Kvartaali": company_q["Kvartaali"]})
-    
-    for col in ["Liikevaihto", "Nettotulos", "EPS"]:
-        if col in company_q.columns:
-            display_df[col] = company_q[col]
-        
-    metric_choice = st.radio(
-        "Valitse näytettävä mittari kuvaajalle:",
-        [c for c in display_df.columns if c != "Kvartaali"],
-        horizontal=True
+    if "Pvm" in company.columns:
+        company = company.sort_values("Pvm", ascending=True)
+    else:
+        company = company.sort_values("Kvarttaali", ascending=True)
+
+    metric = st.radio(
+        "Valitse tarkasteltava tunnusluku",
+        ["Liikevaihto", "Nettotulos", "EPS"],
+        horizontal=True,
+        key="quarter_metric"
     )
-    
-    if metric_choice:
-        fig = px.bar(
-            display_df,
-            x="Kvartaali",
-            y=metric_choice,
-            title=f"{company_name} - {metric_choice}",
-            color=metric_choice,
-            color_continuous_scale="Viridis"
-        )
-        fig.update_layout(xaxis_type="category")
-        st.plotly_chart(fig, use_container_width=True)
-        
-    st.dataframe(display_df, use_container_width=True, hide_index=True)
+
+    fig = px.bar(
+        company,
+        x="Kvarttaali",
+        y=metric,
+        color=metric,
+        text_auto=".2s",
+        title=f"{company_name} – {metric}",
+        color_continuous_scale="Blues"
+    )
+
+    fig.update_layout(
+        xaxis_title="Kvartaali",
+        yaxis_title=metric,
+        template="plotly_white",
+        coloraxis_showscale=False
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+
+    st.subheader("Kvartaalitiedot")
+
+    display = company[
+        ["Kvarttaali", "Liikevaihto", "Nettotulos", "EPS"]
+    ].copy()
+
+    display["Liikevaihto"] = display["Liikevaihto"].round(1)
+    display["Nettotulos"] = display["Nettotulos"].round(1)
+    display["EPS"] = display["EPS"].round(2)
+
+    st.dataframe(
+        display,
+        use_container_width=True,
+        hide_index=True
+    )
