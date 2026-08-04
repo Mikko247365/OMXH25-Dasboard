@@ -82,7 +82,7 @@ def get_info_data(companies):
     
     return pd.DataFrame(all_data)
 
-# Ladataan P/E (Trailing, Forward), Market Cap, P/B, PS(Trailing 12months) , EPS (Current year, Trailing, Forward), MA50, MA200
+# Ladataan P/E (Trailing, Forward), Market Cap, P/B, PS(Trailing 12months) , EPS (Current year, Trailing, Forward), MA50, MA200, Osionko %
 def get_keyfigures_data(companies):
     all_data = []
     
@@ -99,6 +99,7 @@ def get_keyfigures_data(companies):
         forwardeps = stock.info.get("forwardEps")
         epscurrent = stock.info.get("epsCurrentYear")
         trailingps = stock.info.get("priceToSalesTrailing12Months")
+        trailing_yield = info.get("trailingAnnualDividendYield")
         
         all_data.append({
             "Yritys": name,
@@ -111,7 +112,8 @@ def get_keyfigures_data(companies):
             "EPS Current year": epscurrent,
             "Trailing EPS": trailingeps,
             "Forward EPS": forwardeps,
-            "Trailing P/S": trailingps
+            "Trailing P/S": trailingps,
+            "Osinko % (Trailing)": trailing_yield
         })
     
     return pd.DataFrame(all_data)
@@ -138,6 +140,15 @@ def get_quarterly_stmt(companies):
             
     return pd.DataFrame(all_data)
 
+#Käytetään tätä funktioita visualisoinneissa. Tämä hakee CSV tiedostosta dataframeen tarvittavat asiat
+def quarterly_data(path="Kvarttaalidata.csv"):
+    df = pd.read_csv(path)
+    
+    if "Unnamed: 0" in df.columns:
+        df = df.drop(columns=["Unnamed: 0"])
+        
+    return df
+
 #Haetaan vuosittaiset tulokset
 def get_income_stmt(companies):
     all_data = []
@@ -159,22 +170,37 @@ def get_income_stmt(companies):
             
     return pd.DataFrame(all_data)
 
+##### TÄSTÄ ETEENPÄIN FUNKTIOT PÄIVITTÄÄ TUOTA KVARTTAALLIDATA CSV:TÄ. KÄYTETÄÄN MANUAALISESTI!
+def find_new_quarters(existing_df, new_df):
+    existing_keys = set(zip(existing_df["Yritys"], existing_df["Kvarttaali"]))
+    new_rows = new_df[
+        ~new_df[["Yritys", "Kvarttaali"]].apply(tuple, axis=1).isin(existing_keys)
+    ].copy()
+
+    return new_rows
+
+def update_quarterly_csv(companies, path="Kvarttaalidata.csv"):
+    existing_df = quarterly_data(path)
+    fetched_df = get_quarterly_stmt(companies)
+
+    new_rows = find_new_quarters(existing_df, fetched_df)
+
+    if new_rows.empty:
+        print("Ei uusia kvarttaaleja.")
+        return existing_df
+
+    updated_df = pd.concat([existing_df, new_rows], ignore_index=True)
+    updated_df = updated_df.sort_values(["Yritys", "Kvarttaali"]).reset_index(drop=True)
+    updated_df.to_csv(path, index=False)
+
+    print(f"Lisättiin {len(new_rows)} uutta riviä CSV:hen.")
+    return updated_df
+
 if __name__ == "__main__":
-    price = get_price_data(COMPANIES)
-    info = get_info_data(COMPANIES)
-    keyfigures = get_keyfigures_data(COMPANIES)
-    quarters = get_quarterly_stmt(COMPANIES)
-    yearly = get_income_stmt(COMPANIES)
+    updated_quarters = update_quarterly_csv(COMPANIES, "Kvarttaalidata.csv")
+    print(updated_quarters.tail())
     
-    ticker = yf.Ticker("QTCOM.HE")
     
-    df = pd.DataFrame([ticker.info])
-    qtrt = ticker.quarterly_income_stmt
+
     
-    # print(qtrt.info())
     
-    # print(quarters[quarters["Yritys"]== "Nokia"])
-    
-    print(yearly)
-    
-    # print(yearly)
