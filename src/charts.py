@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -6,10 +7,10 @@ import plotly.express as px
 # 1. YHTIÖKOHTAINEN OSIO (Valikko + Kurssi + KPI:t + Kvartaalit)
 # =============================================================
 def render_single_company_section(df_prices, df_keyfigures, df_quarters, df_info, company_list):
-    """
-    Kokoaa yhteen paikkaan yhtiövalinnan, kurssikuvaajan, tunnuslukukortit 
-    ja kvartaalianalyysin.
-    """
+    
+# Kokoaa yhteen paikkaan yhtiövalinnan, kurssikuvaajan, tunnuslukukortit 
+# ja kvartaalianalyysin.
+    
     st.header("🏢 Yhtiökohtainen analyysi")
 
     # Yhtiövalinta komponenttina suoraan tässä funktiossa
@@ -48,10 +49,10 @@ def render_single_company_section(df_prices, df_keyfigures, df_quarters, df_info
 # 2. YHTIÖVERTAILUOSIO (Monivalinta + Vertailukaavio + Taulukko)
 # =============================================================
 def render_company_comparison_section(df_prices, df_keyfigures, df_info, company_list):
-    """
-    Kokoaa yhteen paikkaan useamman yhtiön valinnan, vertailukaavion 
-    ja järjestettävän vertailutaulukon.
-    """
+    
+    # Kokoaa yhteen paikkaan useamman yhtiön valinnan, vertailukaavion 
+    # ja järjestettävän vertailutaulukon.
+    
     st.header("📊 Yhtiövertailu")
 
     # Monivalintakomponentti yhtiöille
@@ -102,7 +103,7 @@ def render_company_comparison_section(df_prices, df_keyfigures, df_info, company
 # =============================================================
 
 def plot_price_history(df_price, selected_companies):
-    """Piirtää Plotly-viivakaavion valituille osakkeille."""
+   #Piirtää Plotly-viivakaavion valituille osakkeille.
     if isinstance(selected_companies, str):
         selected_companies = [selected_companies]
 
@@ -133,7 +134,7 @@ def plot_price_history(df_price, selected_companies):
 
 
 def render_company_kpis(company_name, df_price, df_keyfigures):
-    """Esittää valitun yhtiön tunnusluvut Streamlit metric -kortteina."""
+    #Esittää valitun yhtiön tunnusluvut Streamlit metric -kortteina.
     price = df_price[df_price["Yritys"] == company_name].sort_values("Date") if df_price is not None else pd.DataFrame()
     key = df_keyfigures[df_keyfigures["Yritys"] == company_name] if df_keyfigures is not None else pd.DataFrame()
 
@@ -206,7 +207,7 @@ def render_company_kpis(company_name, df_price, df_keyfigures):
 
 
 def render_quarterly_analysis(company_name, df_quarters):
-    """Esittää kvartaalitulokset Kvarttaalidata.csv:stä."""
+    #Esittää kvartaalitulokset Kvarttaalidata.csv:stä.
     if df_quarters is None or df_quarters.empty:
         st.info("Kvartaalidataa ei ole ladattu.")
         return
@@ -235,7 +236,7 @@ def render_quarterly_analysis(company_name, df_quarters):
         x="Kvarttaali",
         y=metric,
         color=metric,
-        text_auto=".2s",
+        text_auto=".2f",
         title=f"{company_name} – {metric} kvartaaleittain",
         color_continuous_scale="Blues"
     )
@@ -264,7 +265,7 @@ def render_quarterly_analysis(company_name, df_quarters):
 
 
 def create_comparison_table(df_price, df_keyfigures, df_info, selected_companies, sort_by="Muutos %", ascending=False):
-    """Laskee ja muodostaa yhtiöiden vertailutaulukon."""
+   #Laskee ja muodostaa yhtiöiden vertailutaulukon.
     rows = []
     if isinstance(selected_companies, str):
         selected_companies = [selected_companies]

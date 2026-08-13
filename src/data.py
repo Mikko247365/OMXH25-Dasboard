@@ -99,7 +99,7 @@ def get_keyfigures_data(companies):
         forwardeps = stock.info.get("forwardEps")
         epscurrent = stock.info.get("epsCurrentYear")
         trailingps = stock.info.get("priceToSalesTrailing12Months")
-        trailing_yield = info.get("trailingAnnualDividendYield")
+        trailing_yield = stock.info.get("trailingAnnualDividendYield") or stock.info.get("dividendYield")
         
         all_data.append({
             "Yritys": name,
