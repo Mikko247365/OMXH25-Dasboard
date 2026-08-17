@@ -97,6 +97,12 @@ st.write("")
 tab1, tab2 = st.tabs(["🏢 Yhtiökohtainen tarkastelu", "📊 Yhtiövertailu"])
 
 with tab1:
+
+    st.subheader("Valitse aikaväli kurssikehitykselle")
+
+    start_date = st.date_input("Alkupäivä")
+    end_date = st.date_input("Loppupäivä")
+
     vis.render_single_company_section(
         df_prices=df_prices,
         df_keyfigures=df_keyfigures,
