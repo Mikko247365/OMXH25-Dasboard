@@ -96,12 +96,13 @@ st.write("")
 # -------------------------------------------------------------
 tab1, tab2 = st.tabs(["🏢 Yhtiökohtainen tarkastelu", "📊 Yhtiövertailu"])
 
+
+start_date = st.date_input("Alkupäivä")
+end_date = st.date_input("Loppupäivä")
+
 with tab1:
 
     st.subheader("Valitse aikaväli kurssikehitykselle")
-
-    start_date = st.date_input("Alkupäivä")
-    end_date = st.date_input("Loppupäivä")
 
     vis.render_single_company_section(
     df_prices=df_prices,
@@ -122,12 +123,3 @@ with tab2:
     start_date=start_date,
     end_date=end_date
 )
-
-
-with tab2:
-    vis.render_company_comparison_section(
-        df_prices=df_prices,
-        df_keyfigures=df_keyfigures,
-        df_info=df_info,
-        company_list=company_list
-    )
