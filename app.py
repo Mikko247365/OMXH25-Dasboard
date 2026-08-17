@@ -122,3 +122,17 @@ with tab2:
     start_date=start_date,
     end_date=end_date
 )
+        df_prices=df_prices,
+        df_keyfigures=df_keyfigures,
+        df_quarters=df_quarters,
+        df_info=df_info,
+        company_list=company_list
+    )
+
+with tab2:
+    vis.render_company_comparison_section(
+        df_prices=df_prices,
+        df_keyfigures=df_keyfigures,
+        df_info=df_info,
+        company_list=company_list
+    )
