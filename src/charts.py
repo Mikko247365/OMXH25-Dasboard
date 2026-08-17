@@ -6,7 +6,12 @@ import plotly.express as px
 # =============================================================
 # 1. YHTIÖKOHTAINEN OSIO (Valikko + Kurssi + KPI:t + Kvartaalit)
 # =============================================================
-def render_single_company_section(df_prices, df_keyfigures, df_quarters, df_info, company_list):
+def render_single_company_section(
+    df_prices, df_keyfigures, df_quarters, df_info, company_list,
+    start_date, end_date
+):
+    # Suodata hinnat aikavälin mukaan
+    df_prices = filter_by_date(df_prices, start_date, end_date)
     
 # Kokoaa yhteen paikkaan yhtiövalinnan, kurssikuvaajan, tunnuslukukortit 
 # ja kvartaalianalyysin.
@@ -48,13 +53,20 @@ def render_single_company_section(df_prices, df_keyfigures, df_quarters, df_info
 # =============================================================
 # 2. YHTIÖVERTAILUOSIO (Monivalinta + Vertailukaavio + Taulukko)
 # =============================================================
-def render_company_comparison_section(df_prices, df_keyfigures, df_info, company_list):
+def render_company_comparison_section(
+    df_prices, df_keyfigures, df_info, company_list,
+    start_date, end_date
+):
+
+    # Suodata hinnat aikavälin mukaan
+    df_prices = filter_by_date(df_prices, start_date, end_date)
+
+    st.header("📊 Yhtiövertailu")
+
     
     # Kokoaa yhteen paikkaan useamman yhtiön valinnan, vertailukaavion 
     # ja järjestettävän vertailutaulukon.
     
-    st.header("📊 Yhtiövertailu")
-
     # Monivalintakomponentti yhtiöille
     selected_companies = st.multiselect(
         "Valitse vertailtavat yhtiöt:",
@@ -101,6 +113,12 @@ def render_company_comparison_section(df_prices, df_keyfigures, df_info, company
 # =============================================================
 # APUFUNKTIOT (Kuvaajat, Taulukot, KPI-kortit)
 # =============================================================
+def filter_by_date(df, start_date, end_date):
+    df_filtered = df[
+        (df["Date"] >= pd.to_datetime(start_date)) &
+        (df["Date"] <= pd.to_datetime(end_date))
+    ].copy()
+    return df_filtered
 
 def plot_price_history(df_price, selected_companies):
    #Piirtää Plotly-viivakaavion valituille osakkeille.
