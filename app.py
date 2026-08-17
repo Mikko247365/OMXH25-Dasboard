@@ -104,6 +104,24 @@ with tab1:
     end_date = st.date_input("Loppupäivä")
 
     vis.render_single_company_section(
+    df_prices=df_prices,
+    df_keyfigures=df_keyfigures,
+    df_quarters=df_quarters,
+    df_info=df_info,
+    company_list=company_list,
+    start_date=start_date,
+    end_date=end_date
+)
+
+with tab2:
+    vis.render_company_comparison_section(
+    df_prices=df_prices,
+    df_keyfigures=df_keyfigures,
+    df_info=df_info,
+    company_list=company_list,
+    start_date=start_date,
+    end_date=end_date
+)
         df_prices=df_prices,
         df_keyfigures=df_keyfigures,
         df_quarters=df_quarters,
