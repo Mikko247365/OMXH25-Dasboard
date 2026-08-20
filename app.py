@@ -1,6 +1,7 @@
 import streamlit as st
 import src.data as data
 import src.charts as vis
+import datetime
 
 st.set_page_config(
     page_title="OMXH25 Visualisoinnit",
@@ -24,7 +25,7 @@ h1, h2, h3, h4 {
     font-weight: 600;
 }
 
-/* KPI-korttien reunat ja padding — */
+/* KPI-korttien reunat ja padding */
 div[data-testid="stMetric"] {
     padding: 20px !important;
     border-radius: 10px !important;
@@ -92,33 +93,49 @@ st.write("")
 st.write("")
 
 # -------------------------------------------------------------
+# Päivämäärävalinta (oikea paikka)
+# -------------------------------------------------------------
+MIN_DATE = datetime.date(2024, 1, 1)
+TODAY = datetime.date.today()
+
+st.subheader("📅 Valitse aikaväli kurssikehitykselle")
+
+start_date = st.date_input(
+    "Alkupäivä",
+    value=TODAY,
+    min_value=MIN_DATE,
+    max_value=TODAY
+)
+
+end_date = st.date_input(
+    "Loppupäivä",
+    value=TODAY,
+    min_value=MIN_DATE,
+    max_value=TODAY
+)
+
+# -------------------------------------------------------------
 # UI v1 — kaksi tabia
 # -------------------------------------------------------------
 tab1, tab2 = st.tabs(["🏢 Yhtiökohtainen tarkastelu", "📊 Yhtiövertailu"])
 
 with tab1:
-
-    st.subheader("Valitse aikaväli kurssikehitykselle")
-
-    start_date = st.date_input("Alkupäivä")
-    end_date = st.date_input("Loppupäivä")
-
     vis.render_single_company_section(
-    df_prices=df_prices,
-    df_keyfigures=df_keyfigures,
-    df_quarters=df_quarters,
-    df_info=df_info,
-    company_list=company_list,
-    start_date=start_date,
-    end_date=end_date
-)
+        df_prices=df_prices,
+        df_keyfigures=df_keyfigures,
+        df_quarters=df_quarters,
+        df_info=df_info,
+        company_list=company_list,
+        start_date=start_date,
+        end_date=end_date
+    )
 
 with tab2:
     vis.render_company_comparison_section(
-    df_prices=df_prices,
-    df_keyfigures=df_keyfigures,
-    df_info=df_info,
-    company_list=company_list,
-    start_date=start_date,
-    end_date=end_date
-)
+        df_prices=df_prices,
+        df_keyfigures=df_keyfigures,
+        df_info=df_info,
+        company_list=company_list,
+        start_date=start_date,
+        end_date=end_date
+    )
