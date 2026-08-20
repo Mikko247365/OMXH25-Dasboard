@@ -92,27 +92,73 @@ company_list = list(data.COMPANIES.keys())
 st.write("")
 st.write("")
 
-# -------------------------------------------------------------
-# Päivämäärävalinta (oikea paikka)
-# -------------------------------------------------------------
+
 MIN_DATE = datetime.date(2024, 1, 1)
 TODAY = datetime.date.today()
 
+
+# -------------------------------------------------------------
+# Valinta: Päivämäärä vs Kvartaali
+# -------------------------------------------------------------
+mode = st.radio(
+    "Valitse tarkastelutapa",
+    ["Päivämäärä", "Kvartaali"],
+    horizontal=True
+)
+
 st.subheader("📅 Valitse aikaväli kurssikehitykselle")
 
-start_date = st.date_input(
-    "Alkupäivä",
-    value=TODAY,
-    min_value=MIN_DATE,
-    max_value=TODAY
-)
+# -------------------------------------------------------------
+# Päivämäärävalinta (näkyy vain jos valittu)
+# -------------------------------------------------------------
+ 
+if mode == "Päivämäärä":
+    start_date = st.date_input(
+        "Alkupäivä",
+        value=TODAY,
+        min_value=MIN_DATE,
+        max_value=TODAY
+    )
 
-end_date = st.date_input(
-    "Loppupäivä",
-    value=TODAY,
-    min_value=MIN_DATE,
-    max_value=TODAY
-)
+    end_date = st.date_input(
+        "Loppupäivä",
+        value=TODAY,
+        min_value=MIN_DATE,
+        max_value=TODAY
+    )
+    # -------------------------------------------------------------
+# Kvartaali-valinta (näkyy vain jos valittu)
+# -------------------------------------------------------------
+if mode == "Kvartaali":
+    kvartaalit = sorted(df_quarters["Kvarttaali"].unique())
+
+    selected_quarter = st.selectbox(
+        "Valitse kvartaali",
+        kvartaalit
+    )
+
+
+    # Muutetaan kvartaalivalinta päivämääriksi
+    year = int(selected_quarter[:4])
+    q = int(selected_quarter[-1])
+
+    quarter_start = {
+        1: datetime.date(year, 1, 1),
+        2: datetime.date(year, 4, 1),
+        3: datetime.date(year, 7, 1),
+        4: datetime.date(year, 10, 1)
+    }[q]
+
+    quarter_end = {
+        1: datetime.date(year, 3, 31),
+        2: datetime.date(year, 6, 30),
+        3: datetime.date(year, 9, 30),
+        4: datetime.date(year, 12, 31)
+    }[q]
+
+    start_date = quarter_start
+    end_date = quarter_end
+
 
 # -------------------------------------------------------------
 # UI v1 — kaksi tabia
