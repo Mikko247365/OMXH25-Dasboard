@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -13,9 +12,6 @@ def render_single_company_section(
     # Suodata hinnat aikavälin mukaan
     df_prices = filter_by_date(df_prices, start_date, end_date)
     
-# Kokoaa yhteen paikkaan yhtiövalinnan, kurssikuvaajan, tunnuslukukortit 
-# ja kvartaalianalyysin.
-    
     st.header("🏢 Yhtiökohtainen analyysi")
 
     # Yhtiövalinta komponenttina suoraan tässä funktiossa
@@ -28,7 +24,7 @@ def render_single_company_section(
 
     st.subheader(f"📈 {selected_company} – Osakekurssi ja kehitys")
 
-    # Kurssikaavio
+    # Kurssikaavio (sisältää liukuvat keskiarvot MA50 ja MA200)
     fig = plot_price_history(df_prices, selected_company)
     if fig:
         st.plotly_chart(fig, use_container_width=True)
@@ -38,13 +34,12 @@ def render_single_company_section(
     st.divider()
 
     # Tunnuslukukortit
-    st.subheader(f"📊 {selected_company} – Avaintunnusluvut")
     render_company_kpis(selected_company, df_prices, df_keyfigures)
 
     st.divider()
 
     # Kvartaalitilastot Kvarttaalidata.csv:stä
-    st.subheader(f"📅 {selected_company} – Kvartaalitulokset")
+    st.subheader(f"📅 {selected_company} | Kvartaalitulokset")
     render_quarterly_analysis(selected_company, df_quarters)
 
     return selected_company
@@ -63,10 +58,6 @@ def render_company_comparison_section(
 
     st.header("📊 Yhtiövertailu")
 
-    
-    # Kokoaa yhteen paikkaan useamman yhtiön valinnan, vertailukaavion 
-    # ja järjestettävän vertailutaulukon.
-    
     # Monivalintakomponentti yhtiöille
     selected_companies = st.multiselect(
         "Valitse vertailtavat yhtiöt:",
@@ -114,14 +105,19 @@ def render_company_comparison_section(
 # APUFUNKTIOT (Kuvaajat, Taulukot, KPI-kortit)
 # =============================================================
 def filter_by_date(df, start_date, end_date):
+    if df is None or df.empty or "Date" not in df.columns:
+        return df
+
     df_filtered = df[
         (df["Date"] >= pd.to_datetime(start_date)) &
         (df["Date"] <= pd.to_datetime(end_date))
     ].copy()
     return df_filtered
 
+
 def plot_price_history(df_price, selected_companies):
-   #Piirtää Plotly-viivakaavion valituille osakkeille.
+    # Piirtää Plotly-viivakaavion valituille osakkeille.
+    # Jos valittu yhtiöitä on 1, laskee ja piirtää myös MA50 ja MA200 liukuvat keskiarvot.
     if isinstance(selected_companies, str):
         selected_companies = [selected_companies]
 
@@ -132,19 +128,38 @@ def plot_price_history(df_price, selected_companies):
     if df.empty:
         return None
 
-    fig = px.line(
-        df,
-        x="Date",
-        y="Close",
-        color="Yritys",
-        title="Osakkeiden kurssikehitys"
-    )
+    df = df.sort_values("Date")
+
+    # Jos kyseessä on yksittäinen yhtiö, lasketaan liukuvat keskiarvot (MA)
+    if len(selected_companies) == 1:
+        df["MA50"] = df["Close"].rolling(window=50).mean()
+        df["MA200"] = df["Close"].rolling(window=200).mean()
+
+        fig = px.line(
+            df,
+            x="Date",
+            y=["Close", "MA50", "MA200"],
+            title=f"{selected_companies[0]} – Osakekurssi ja liukuvat keskiarvot",
+            labels={"value": "Hinta (€)", "variable": "Käyrä"}
+        )
+        
+        # Selitteiden (legend) nimentä selkeäksi
+        newnames = {'Close': 'Sulkemishinta', 'MA50': 'MA 50', 'MA200': 'MA 200'}
+        fig.for_each_trace(lambda t: t.update(name=newnames.get(t.name, t.name)))
+    else:
+        fig = px.line(
+            df,
+            x="Date",
+            y="Close",
+            color="Yritys",
+            title="Osakkeiden kurssikehitys"
+        )
 
     fig.update_layout(
         hovermode="x unified",
         xaxis_title="Päivämäärä",
         yaxis_title="Kurssi (€)",
-        legend_title="Yhtiö",
+        legend_title="Tiedot",
         template="plotly_white",
         margin=dict(l=20, r=20, t=50, b=20)
     )
@@ -152,7 +167,7 @@ def plot_price_history(df_price, selected_companies):
 
 
 def render_company_kpis(company_name, df_price, df_keyfigures):
-    #Esittää valitun yhtiön tunnusluvut Streamlit metric -kortteina.
+    # Esittää valitun yhtiön kurssiyhteenvedon ja tunnusluvut Streamlit metric -kortteina.
     price = df_price[df_price["Yritys"] == company_name].sort_values("Date") if df_price is not None else pd.DataFrame()
     key = df_keyfigures[df_keyfigures["Yritys"] == company_name] if df_keyfigures is not None else pd.DataFrame()
 
@@ -160,14 +175,22 @@ def render_company_kpis(company_name, df_price, df_keyfigures):
         st.warning(f"Ei hintadataa yhtiölle {company_name}.")
         return
 
-    valid_close = price["Close"].dropna()
-    if valid_close.empty:
+    valid_price_df = price.dropna(subset=["Close"])
+    if valid_price_df.empty:
         return
 
+    valid_close = valid_price_df["Close"]
     latest = valid_close.iloc[-1]
     first = valid_close.iloc[0]
     highest = valid_close.max()
     lowest = valid_close.min()
+
+    # Haetaan aikavälin aloitus- ja lopetuspäivämäärät
+    first_date = valid_price_df["Date"].iloc[0]
+    latest_date = valid_price_df["Date"].iloc[-1]
+    
+    first_date_str = first_date.strftime("%d.%m.%Y") if hasattr(first_date, "strftime") else str(first_date)
+    latest_date_str = latest_date.strftime("%d.%m.%Y") if hasattr(latest_date, "strftime") else str(latest_date)
 
     price_change_eur = latest - first
     change_pct = ((latest - first) / first) * 100
@@ -183,49 +206,48 @@ def render_company_kpis(company_name, df_price, df_keyfigures):
             break
     div_yield = key[div_col].iloc[0] if div_col and not key.empty else None
 
-    ma50 = key["MA50"].iloc[0] if "MA50" in key.columns and not key.empty else None
-    ma200 = key["MA200"].iloc[0] if "MA200" in key.columns and not key.empty else None
     marketcap = key["Marketcap"].iloc[0] if "Marketcap" in key.columns and not key.empty else None
     eps = key["Trailing EPS"].iloc[0] if "Trailing EPS" in key.columns and not key.empty else None
 
-    st.markdown("##### 📈 Kurssiyhteenveto")
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Viimeisin kurssi", f"{latest:.2f} €")
-    c2.metric("Ylin kurssi", f"{highest:.2f} €")
-    c3.metric("Alin kurssi", f"{lowest:.2f} €")
-    c4.metric("Tuotto valitulla aikavälillä", f"{price_change_eur:+.2f} €", delta=f"{change_pct:.2f} %")
+    # 1. Kurssiyhteenveto (valittu aikaväli suluissa otsikossa)
+    st.subheader(f"📈 Kurssiyhteenveto | Valittu aikaväli: {first_date_str} – {latest_date_str}")
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Ylin kurssi", f"{highest:.2f} €")
+    c2.metric("Alin kurssi", f"{lowest:.2f} €")
+    c3.metric("Muutos valitulla aikavälillä", f"{price_change_eur:+.2f} €", delta=f"{change_pct:.2f} %")
 
     st.write("")
 
-    st.markdown("##### 📊 Valuaatio & Osinko")
-    k1, k2, k3, k4 = st.columns(4)
+    # 2. Tunnusluvut (tuorein valittu päivämäärä ja kurssi suluissa otsikossa)
+    st.subheader(f"📊 Tunnusluvut | Päätöskurssi {latest:.2f} € ({latest_date_str} )")
+    
+    # Rivi 1: Valuaatiokertoimet (3 laatikkoa)
+    k1, k2, k3 = st.columns(3)
     k1.metric("P/E (Trailing)", "-" if pd.isna(pe) else f"{pe:.2f}")
     k2.metric("P/S (Trailing)", "-" if pd.isna(ps) else f"{ps:.2f}")
+    k3.metric("P/B", "-" if pd.isna(pb) else f"{pb:.2f}")
+
+    st.write("")
+
+    # Rivi 2: Muut tunnusluvut ja Osinko (3 laatikkoa)
+    m1, m2, m3 = st.columns(3)
+    m1.metric("EPS (Trailing)", "-" if pd.isna(eps) else f"{eps:.2f} €")
     
     if pd.notna(div_yield):
         div_text = f"{div_yield * 100:.2f} %" if div_yield < 1 else f"{div_yield:.2f} %"
     else:
         div_text = "-"
-    k3.metric("Osinko %", div_text)
+    m2.metric("Osinko %", div_text)
 
     if pd.notna(marketcap):
         marketcap_text = f"{marketcap/1000:.2f} mrd €" if marketcap >= 1000 else f"{marketcap:.0f} M€"
     else:
         marketcap_text = "-"
-    k4.metric("Markkina-arvo", marketcap_text)
-
-    st.write("")
-
-    st.markdown("##### 🔍 Muut tunnusluvut")
-    m1, m2, m3, m4 = st.columns(4)
-    m1.metric("P/B", "-" if pd.isna(pb) else f"{pb:.2f}")
-    m2.metric("MA50", "-" if pd.isna(ma50) else f"{ma50:.2f} €")
-    m3.metric("MA200", "-" if pd.isna(ma200) else f"{ma200:.2f} €")
-    m4.metric("EPS (Trailing)", "-" if pd.isna(eps) else f"{eps:.2f} €")
+    m3.metric("Markkina-arvo", marketcap_text)
 
 
 def render_quarterly_analysis(company_name, df_quarters):
-    #Esittää kvartaalitulokset Kvarttaalidata.csv:stä.
+    # Esittää kvartaalitulokset Kvarttaalidata.csv:stä.
     if df_quarters is None or df_quarters.empty:
         st.info("Kvartaalidataa ei ole ladattu.")
         return
@@ -283,7 +305,7 @@ def render_quarterly_analysis(company_name, df_quarters):
 
 
 def create_comparison_table(df_price, df_keyfigures, df_info, selected_companies, sort_by="Muutos %", ascending=False):
-   #Laskee ja muodostaa yhtiöiden vertailutaulukon.
+    # Laskee ja muodostaa yhtiöiden vertailutaulukon.
     rows = []
     if isinstance(selected_companies, str):
         selected_companies = [selected_companies]
