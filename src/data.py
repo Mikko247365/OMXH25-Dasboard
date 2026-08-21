@@ -57,10 +57,13 @@ def get_price_data(companies, start=start_date, end=end_date):
         ticker = info["ticker"]
         stock = yf.Ticker(ticker)
         data = stock.history(start=start, end=end)
+        total_shares = stock.info.get("sharesOutstanding")
         
         data.reset_index(level=0, inplace=True)
         data["Yritys"] = name
         data["Date"] = data["Date"].dt.tz_localize(None)
+        data["Osakelkm"] = total_shares
+        data["Marketcap"] = total_shares * data["Close"] / 1000000
         all_data.append(data)
         
     return pd.concat(all_data, ignore_index=True)
