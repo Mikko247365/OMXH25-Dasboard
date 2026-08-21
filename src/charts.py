@@ -221,7 +221,11 @@ def render_company_kpis(company_name, df_price, df_keyfigures):
             break
     div_yield = key[div_col].iloc[0] if div_col and not key.empty else None
 
-    marketcap = key["Marketcap"].iloc[0] if "Marketcap" in key.columns and not key.empty else None
+    if "Marketcap" in valid_price_df.columns:
+        marketcap = valid_price_df["Marketcap"].iloc[-1]
+    else:
+        marketcap = key["Marketcap"].iloc[0] if "Marketcap" in key.columns and not key.empty else None
+
     eps = key["Trailing EPS"].iloc[0] if "Trailing EPS" in key.columns and not key.empty else None
 
     # 1. Kurssiyhteenveto (valittu aikaväli suluissa otsikossa)
