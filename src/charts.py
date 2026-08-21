@@ -116,8 +116,6 @@ def filter_by_date(df, start_date, end_date):
 
 
 def plot_price_history(df_price, selected_companies):
-    # Piirtää Plotly-viivakaavion valituille osakkeille.
-    # Jos valittu yhtiöitä on 1, laskee ja piirtää myös MA50 ja MA200 liukuvat keskiarvot.
     if isinstance(selected_companies, str):
         selected_companies = [selected_companies]
 
@@ -135,17 +133,34 @@ def plot_price_history(df_price, selected_companies):
         df["MA50"] = df["Close"].rolling(window=50).mean()
         df["MA200"] = df["Close"].rolling(window=200).mean()
 
+        # Määritetään omat selkeät värit käyrille
+        color_map = {
+            "Sulkemishinta": "#00E5FF",  # Kirkas Cyan / Neon Sininen (Pääkäyrä)
+            "MA 50": "#FF9F0A",          # Warm Orange (Lyhyt KA)
+            "MA 200": "#FF453A"          # Bright Red (Pitkä KA)
+        }
+
+        # Nimetään sarakkeet uudelleen suoraan ennen kuvaajan luontia
+        df_plot = df.rename(columns={
+            "Close": "Sulkemishinta",
+            "MA50": "MA 50",
+            "MA200": "MA 200"
+        })
+
         fig = px.line(
-            df,
+            df_plot,
             x="Date",
-            y=["Close", "MA50", "MA200"],
+            y=["Sulkemishinta", "MA 50", "MA 200"],
             title=f"{selected_companies[0]} – Osakekurssi ja liukuvat keskiarvot",
-            labels={"value": "Hinta (€)", "variable": "Käyrä"}
+            labels={"value": "Hinta (€)", "variable": "Käyrä"},
+            color_discrete_map=color_map
         )
         
-        # Selitteiden (legend) nimentä selkeäksi
-        newnames = {'Close': 'Sulkemishinta', 'MA50': 'MA 50', 'MA200': 'MA 200'}
-        fig.for_each_trace(lambda t: t.update(name=newnames.get(t.name, t.name)))
+        # Säädetään pääkurssin viivasta hieman paksumpi
+        fig.update_traces(patch={"line": {"width": 2.5}}, selector={"name": "Sulkemishinta"})
+        fig.update_traces(patch={"line": {"width": 1.5}}, selector={"name": "MA 50"})
+        fig.update_traces(patch={"line": {"width": 1.5}}, selector={"name": "MA 200"})
+
     else:
         fig = px.line(
             df,
@@ -160,7 +175,7 @@ def plot_price_history(df_price, selected_companies):
         xaxis_title="Päivämäärä",
         yaxis_title="Kurssi (€)",
         legend_title="Tiedot",
-        template="plotly_white",
+        template="plotly_dark",  # Vaihdetaan pohja tummalle teemalle sopivaksi
         margin=dict(l=20, r=20, t=50, b=20)
     )
     return fig
