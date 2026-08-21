@@ -6,7 +6,15 @@ import plotly.express as px
 # =============================================================
 # 1. YHTIÖKOHTAINEN OSIO (Valikko + Kurssi + KPI:t + Kvartaalit)
 # =============================================================
-def render_single_company_section(df_prices, df_keyfigures, df_quarters, df_info, company_list):
+def render_single_company_section(
+    df_prices,
+    df_keyfigures,
+    df_quarters,
+    df_info,
+    company_list,
+    start_date=None,
+    end_date=None
+):
     
 # Kokoaa yhteen paikkaan yhtiövalinnan, kurssikuvaajan, tunnuslukukortit 
 # ja kvartaalianalyysin.
@@ -248,6 +256,42 @@ def render_quarterly_analysis(company_name, df_quarters):
         coloraxis_showscale=False,
         margin=dict(l=20, r=20, t=50, b=20)
     )
+        # --- Gradientti väripalkkia varten ---
+    values = company[metric].fillna(0)
+
+    import plotly.colors as pc
+    blues = pc.sequential.Blues
+
+    sorted_values = values.sort_values()
+    norm = (sorted_values - sorted_values.min()) / (sorted_values.max() - sorted_values.min() + 1e-9)
+    colors_sorted = [blues[int(n * (len(blues) - 1))] for n in norm]
+
+    gradient = f"linear-gradient(to right, {', '.join(colors_sorted)})"
+
+    color_bar = f"""
+    <div style="
+        width: 600px;
+        height: 100px;
+        background: {gradient};
+        border-radius: 4px;
+    "></div>
+    """
+    # --- Otsikko + väripalkki + selite ---
+    st.markdown(
+        f"""
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <h3 style="margin: 0;">{company_name} – {metric} kvartaaleittain</h3>
+            <div style="display: flex; align-items: center; gap: 10px;">
+                {color_bar}
+                
+                    Vaaleampi väri = alempi tulos, tummempi väri = suurempi tulos
+        """,
+        unsafe_allow_html=True
+        
+)
+
+
+
 
     st.plotly_chart(fig, use_container_width=True)
 
