@@ -1,6 +1,7 @@
 import streamlit as st
 import src.data as data
 import src.charts as vis
+import datetime
 
 st.set_page_config(
     page_title="OMXH25 Visualisoinnit",
@@ -24,7 +25,7 @@ h1, h2, h3, h4 {
     font-weight: 600;
 }
 
-/* KPI-korttien reunat ja padding — */
+/* KPI-korttien reunat ja padding */
 div[data-testid="stMetric"] {
     padding: 20px !important;
     border-radius: 10px !important;
@@ -91,10 +92,19 @@ company_list = list(data.COMPANIES.keys())
 st.write("")
 st.write("")
 
+
+MIN_DATE = datetime.date(2024, 1, 1)
+TODAY = datetime.date.today()
+
+
 # -------------------------------------------------------------
-# UI v1 — kaksi tabia
+# Valinta: Päivämäärä vs Kvartaali
 # -------------------------------------------------------------
-tab1, tab2 = st.tabs(["🏢 Yhtiökohtainen tarkastelu", "📊 Yhtiövertailu"])
+mode = st.radio(
+    "Valitse tarkastelutapa",
+    ["Päivämäärä", "Kvartaali"],
+    horizontal=True
+)
 
 
 start_date = st.date_input("Alkupäivä")
@@ -102,7 +112,17 @@ end_date = st.date_input("Loppupäivä")
 
 with tab1:
 
-    st.subheader("Valitse aikaväli kurssikehitykselle")
+# -------------------------------------------------------------
+# Päivämäärävalinta (näkyy vain jos valittu)
+# -------------------------------------------------------------
+ 
+if mode == "Päivämäärä":
+    start_date = st.date_input(
+        "Alkupäivä",
+        value=TODAY,
+        min_value=MIN_DATE,
+        max_value=TODAY
+    )
 
     vis.render_single_company_section(
     df_prices=df_prices,
