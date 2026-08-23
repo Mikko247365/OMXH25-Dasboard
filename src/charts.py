@@ -105,6 +105,12 @@ def render_company_comparison_section(
 # =============================================================
 # APUFUNKTIOT (Kuvaajat, Taulukot, KPI-kortit)
 # =============================================================
+def filter_by_date(df, start_date, end_date):
+    df_filtered = df[
+        (df["Date"] >= pd.to_datetime(start_date)) &
+        (df["Date"] <= pd.to_datetime(end_date))
+    ].copy()
+    return df_filtered
 
 def plot_price_history(df_price, selected_companies, start_date=None, end_date=None):
 
