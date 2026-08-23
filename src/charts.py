@@ -15,13 +15,9 @@ def render_single_company_section(
     start_date=None,
     end_date=None
 ):
-    
-# Kokoaa yhteen paikkaan yhtiövalinnan, kurssikuvaajan, tunnuslukukortit 
-# ja kvartaalianalyysin.
-    
-    st.header("🏢 Yhtiökohtainen analyysi")
 
-    # Yhtiövalinta komponenttina suoraan tässä funktiossa
+    st.header("🏢 Yhtiökohtainen analyysi")
+# Yhtiövalinta komponenttina suoraan tässä funktiossa
     selected_company = st.selectbox(
         "Valitse yhtiö tarkasteltavaksi:",
         options=company_list,
@@ -31,22 +27,19 @@ def render_single_company_section(
 
     st.subheader(f"📈 {selected_company} – Osakekurssi ja kehitys")
 
-    # Kurssikaavio
-    fig = plot_price_history(df_prices, selected_company)
+    fig = plot_price_history(df_prices, selected_company, start_date, end_date)
     if fig:
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, use_container_width=True, key=f"single_chart_{selected_company}")
     else:
         st.warning("Kurssidataa ei voitu esittää valitulle yhtiölle.")
 
     st.divider()
-
-    # Tunnuslukukortit
+ # Tunnuslukukortit
     st.subheader(f"📊 {selected_company} – Avaintunnusluvut")
-    render_company_kpis(selected_company, df_prices, df_keyfigures)
+    render_company_kpis(selected_company, df_prices, df_keyfigures, start_date, end_date)
 
     st.divider()
-
-    # Kvartaalitilastot Kvarttaalidata.csv:stä
+# Kvartaalitilastot Kvarttaalidata.csv:stä
     st.subheader(f"📅 {selected_company} – Kvartaalitulokset")
     render_quarterly_analysis(selected_company, df_quarters)
 
@@ -56,14 +49,17 @@ def render_single_company_section(
 # =============================================================
 # 2. YHTIÖVERTAILUOSIO (Monivalinta + Vertailukaavio + Taulukko)
 # =============================================================
-def render_company_comparison_section(df_prices, df_keyfigures, df_info, company_list):
-    
-    # Kokoaa yhteen paikkaan useamman yhtiön valinnan, vertailukaavion 
-    # ja järjestettävän vertailutaulukon.
-    
-    st.header("📊 Yhtiövertailu")
+def render_company_comparison_section(
+    df_prices,
+    df_keyfigures,
+    df_info,
+    company_list,
+    start_date=None,
+    end_date=None
+):
 
-    # Monivalintakomponentti yhtiöille
+    st.header("📊 Yhtiövertailu")
+# Monivalintakomponentti yhtiöille
     selected_companies = st.multiselect(
         "Valitse vertailtavat yhtiöt:",
         options=company_list,
@@ -75,16 +71,14 @@ def render_company_comparison_section(df_prices, df_keyfigures, df_info, company
         st.info("Valitse vähintään yksi yhtiö vertailua varten.")
         return
 
-    # Monen yhtiön vertailukaavio
-    fig_multi = plot_price_history(df_prices, selected_companies)
+    fig_multi = plot_price_history(df_prices, selected_companies, start_date, end_date)
     if fig_multi:
-        st.plotly_chart(fig_multi, use_container_width=True)
+        st.plotly_chart(fig_multi, use_container_width=True,key="comparison_chart")
 
     st.divider()
-
-    # Järjestettävä vertailutaulukko
+# Järjestettävä vertailutaulukko
     st.subheader("📋 Vertailutaulukko")
-    
+
     col_sort, _ = st.columns([2, 2])
     with col_sort:
         sort_col = st.selectbox(
@@ -100,7 +94,9 @@ def render_company_comparison_section(df_prices, df_keyfigures, df_info, company
         df_info=df_info,
         selected_companies=selected_companies,
         sort_by=sort_col,
-        ascending=False
+        ascending=False,
+        start_date=start_date,
+        end_date=end_date
     )
 
     st.dataframe(table_df, use_container_width=True, hide_index=True)
@@ -110,8 +106,8 @@ def render_company_comparison_section(df_prices, df_keyfigures, df_info, company
 # APUFUNKTIOT (Kuvaajat, Taulukot, KPI-kortit)
 # =============================================================
 
-def plot_price_history(df_price, selected_companies):
-   #Piirtää Plotly-viivakaavion valituille osakkeille.
+def plot_price_history(df_price, selected_companies, start_date=None, end_date=None):
+
     if isinstance(selected_companies, str):
         selected_companies = [selected_companies]
 
@@ -121,6 +117,12 @@ def plot_price_history(df_price, selected_companies):
     df = df_price[df_price["Yritys"].isin(selected_companies)].copy()
     if df.empty:
         return None
+
+    # Päivämääräsuodatus
+    if start_date:
+        df = df[df["Date"] >= pd.to_datetime(start_date)]
+    if end_date:
+        df = df[df["Date"] <= pd.to_datetime(end_date)]
 
     fig = px.line(
         df,
@@ -141,13 +143,18 @@ def plot_price_history(df_price, selected_companies):
     return fig
 
 
-def render_company_kpis(company_name, df_price, df_keyfigures):
-    #Esittää valitun yhtiön tunnusluvut Streamlit metric -kortteina.
-    price = df_price[df_price["Yritys"] == company_name].sort_values("Date") if df_price is not None else pd.DataFrame()
+def render_company_kpis(company_name, df_price, df_keyfigures, start_date=None, end_date=None):
+
+    price = df_price[
+        (df_price["Yritys"] == company_name) &
+        (df_price["Date"] >= pd.to_datetime(start_date)) &
+        (df_price["Date"] <= pd.to_datetime(end_date))
+    ].sort_values("Date") if df_price is not None else pd.DataFrame()
+
     key = df_keyfigures[df_keyfigures["Yritys"] == company_name] if df_keyfigures is not None else pd.DataFrame()
 
     if price.empty:
-        st.warning(f"Ei hintadataa yhtiölle {company_name}.")
+        st.warning(f"Ei hintadataa yhtiölle {company_name} valitulla aikavälillä.")
         return
 
     valid_close = price["Close"].dropna()
@@ -165,7 +172,7 @@ def render_company_kpis(company_name, df_price, df_keyfigures):
     pe = key["Trailing P/E"].iloc[0] if "Trailing P/E" in key.columns and not key.empty else None
     pb = key["P/B"].iloc[0] if "P/B" in key.columns and not key.empty else None
     ps = key["Trailing P/S"].iloc[0] if "Trailing P/S" in key.columns and not key.empty else None
-    
+
     div_col = None
     for c in ["Osinko % (Trailing)", "Osinko-%", "Dividend Yield"]:
         if key is not None and c in key.columns:
@@ -191,7 +198,7 @@ def render_company_kpis(company_name, df_price, df_keyfigures):
     k1, k2, k3, k4 = st.columns(4)
     k1.metric("P/E (Trailing)", "-" if pd.isna(pe) else f"{pe:.2f}")
     k2.metric("P/S (Trailing)", "-" if pd.isna(ps) else f"{ps:.2f}")
-    
+
     if pd.notna(div_yield):
         div_text = f"{div_yield * 100:.2f} %" if div_yield < 1 else f"{div_yield:.2f} %"
     else:
@@ -215,7 +222,7 @@ def render_company_kpis(company_name, df_price, df_keyfigures):
 
 
 def render_quarterly_analysis(company_name, df_quarters):
-    #Esittää kvartaalitulokset Kvarttaalidata.csv:stä.
+
     if df_quarters is None or df_quarters.empty:
         st.info("Kvartaalidataa ei ole ladattu.")
         return
@@ -256,7 +263,8 @@ def render_quarterly_analysis(company_name, df_quarters):
         coloraxis_showscale=False,
         margin=dict(l=20, r=20, t=50, b=20)
     )
-        # --- Gradientti väripalkkia varten ---
+
+    # --- Gradientti väripalkkia varten ---
     values = company[metric].fillna(0)
 
     import plotly.colors as pc
@@ -276,7 +284,7 @@ def render_quarterly_analysis(company_name, df_quarters):
         border-radius: 4px;
     "></div>
     """
-    # --- Otsikko + väripalkki + selite ---
+
     st.markdown(
         f"""
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
@@ -286,11 +294,7 @@ def render_quarterly_analysis(company_name, df_quarters):
                 
                     Vaaleampi väri = alempi tulos, tummempi väri = suurempi tulos
         """,
-        unsafe_allow_html=True
-        
-)
-
-
+        unsafe_allow_html=True )
 
 
     st.plotly_chart(fig, use_container_width=True)
@@ -308,14 +312,29 @@ def render_quarterly_analysis(company_name, df_quarters):
     st.dataframe(display, use_container_width=True, hide_index=True)
 
 
-def create_comparison_table(df_price, df_keyfigures, df_info, selected_companies, sort_by="Muutos %", ascending=False):
-   #Laskee ja muodostaa yhtiöiden vertailutaulukon.
+def create_comparison_table(
+    df_price,
+    df_keyfigures,
+    df_info,
+    selected_companies,
+    sort_by="Muutos %",
+    ascending=False,
+    start_date=None,
+    end_date=None
+):
+
     rows = []
     if isinstance(selected_companies, str):
         selected_companies = [selected_companies]
 
     for company in selected_companies:
-        prices = df_price[df_price["Yritys"] == company].sort_values("Date") if df_price is not None else pd.DataFrame()
+
+        prices = df_price[
+            (df_price["Yritys"] == company) &
+            (df_price["Date"] >= pd.to_datetime(start_date)) &
+            (df_price["Date"] <= pd.to_datetime(end_date))
+        ].sort_values("Date") if df_price is not None else pd.DataFrame()
+
         if prices.empty:
             continue
 
@@ -369,3 +388,4 @@ def create_comparison_table(df_price, df_keyfigures, df_info, selected_companies
         table = table.drop(columns=["_raw_mcap"])
 
     return table
+

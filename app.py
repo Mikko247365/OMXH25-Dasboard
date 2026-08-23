@@ -181,6 +181,8 @@ with tab2:
         df_prices=df_prices,
         df_keyfigures=df_keyfigures,
         df_info=df_info,
-        company_list=company_list,       
+        company_list=company_list,
+        start_date=start_date,
+        end_date=end_date     
 
     )
