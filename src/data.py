@@ -68,6 +68,23 @@ def get_price_data(companies, start=start_date, end=end_date):
         
     return pd.concat(all_data, ignore_index=True)
 
+# Normalisoidaan data monen yrityksen kohdalla 
+def normalize_price_data(df_price, base_value=100):
+    df = df_price.copy()
+
+    if df.empty:
+        return df
+
+    df = df.dropna(subset=["Close"])
+    df = df.sort_values(["Yritys", "Date"])
+
+    first_close = df.groupby("Yritys")["Close"].transform("first")
+    
+    #Lisätään uusi sarake dataframeen
+    df["Normalized"] = (df["Close"] / first_close) * base_value
+
+    return df
+
 #Haetaan sektorit
 def get_info_data(companies):
     all_data = []
