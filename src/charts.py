@@ -1,7 +1,7 @@
-
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+from src.data import normalize_price_data
 
 # =============================================================
 # 1. YHTIÖKOHTAINEN OSIO (Valikko + Kurssi + KPI:t + Kvartaalit)
@@ -15,9 +15,8 @@ def render_single_company_section(
     start_date=None,
     end_date=None
 ):
-
     st.header("🏢 Yhtiökohtainen analyysi")
-# Yhtiövalinta komponenttina suoraan tässä funktiossa
+
     selected_company = st.selectbox(
         "Valitse yhtiö tarkasteltavaksi:",
         options=company_list,
@@ -28,23 +27,23 @@ def render_single_company_section(
     st.subheader(f"📈 {selected_company} – Osakekurssi ja kehitys")
 
     fig = plot_price_history(df_prices, selected_company, start_date, end_date)
+
     if fig:
         st.plotly_chart(fig, use_container_width=True, key=f"single_chart_{selected_company}")
     else:
         st.warning("Kurssidataa ei voitu esittää valitulle yhtiölle.")
 
     st.divider()
- # Tunnuslukukortit
-    st.subheader(f"📊 {selected_company} – Avaintunnusluvut")
-    render_company_kpis(selected_company, df_prices, df_keyfigures, start_date, end_date)
+
+    df_prices_filtered = filter_by_date(df_prices, start_date, end_date)
+    render_company_kpis(selected_company, df_prices_filtered, df_keyfigures)
 
     st.divider()
-# Kvartaalitilastot Kvarttaalidata.csv:stä
-    st.subheader(f"📅 {selected_company} – Kvartaalitulokset")
+
+    st.subheader(f"📅 {selected_company} | Kvartaalitulokset")
     render_quarterly_analysis(selected_company, df_quarters)
 
     return selected_company
-
 
 # =============================================================
 # 2. YHTIÖVERTAILUOSIO (Monivalinta + Vertailukaavio + Taulukko)
@@ -57,9 +56,8 @@ def render_company_comparison_section(
     start_date=None,
     end_date=None
 ):
-
     st.header("📊 Yhtiövertailu")
-# Monivalintakomponentti yhtiöille
+
     selected_companies = st.multiselect(
         "Valitse vertailtavat yhtiöt:",
         options=company_list,
@@ -71,49 +69,78 @@ def render_company_comparison_section(
         st.info("Valitse vähintään yksi yhtiö vertailua varten.")
         return
 
-    fig_multi = plot_price_history(df_prices, selected_companies, start_date, end_date)
+    # Valintapainike normalisoinnille
+    use_normalization = False
+    if len(selected_companies) > 0:
+        view_mode = st.radio(
+            "Valitse vertailutapa:",
+            options=["Eurohinta (€)", "Normalisoitu (Alku = 100)"],
+            horizontal=True,
+            key="comparison_view_mode"
+        )
+        use_normalization = (view_mode == "Normalisoitu (Alku = 100)")
+
+    fig_multi = plot_price_history(df_prices, selected_companies, start_date, end_date, normalize=use_normalization)
+
     if fig_multi:
-        st.plotly_chart(fig_multi, use_container_width=True,key="comparison_chart")
+        st.plotly_chart(fig_multi, use_container_width=True, key="comparison_chart")
 
     st.divider()
-# Järjestettävä vertailutaulukko
-    st.subheader("📋 Vertailutaulukko")
 
-    col_sort, _ = st.columns([2, 2])
-    with col_sort:
-        sort_col = st.selectbox(
-            "Järjestä taulukko sarakkeen mukaan:",
-            options=["Muutos %", "Tuotto (€)", "Viimeisin (€)", "Markkina-arvo"],
-            index=0,
-            key="charts_sort_select"
-        )
-
-    table_df = create_comparison_table(
+    table_df, latest_date_str, first_date_str = create_comparison_table(
         df_price=df_prices,
         df_keyfigures=df_keyfigures,
         df_info=df_info,
         selected_companies=selected_companies,
-        sort_by=sort_col,
-        ascending=False,
         start_date=start_date,
         end_date=end_date
     )
 
-    st.dataframe(table_df, use_container_width=True, hide_index=True)
+    if first_date_str and latest_date_str:
+        st.subheader(f"📋 Vertailutaulukko | Valittu aikaväli: {first_date_str} – {latest_date_str}")
+    else:
+        st.subheader("📋 Vertailutaulukko")
 
+    if not table_df.empty:
+        col_names = table_df.columns.tolist()
+        viimeisin_col_key = next((c for c in col_names if "Viimeisin" in c), "Viimeisin (€)")
+        marketcap_col_key = next((c for c in col_names if "Markkina-arvo" in c), "Markkina-arvo")
+
+        st.dataframe(
+            table_df,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "Yhtiö": st.column_config.TextColumn("Yhtiö", alignment="left"),
+                "Toimiala": st.column_config.TextColumn("Toimiala", alignment="left"),
+                viimeisin_col_key: st.column_config.NumberColumn(viimeisin_col_key, format="%.2f €", alignment="right"),
+                "Ylin (€)": st.column_config.NumberColumn("Ylin (€)", format="%.2f €", alignment="right"),
+                "Alin (€)": st.column_config.NumberColumn("Alin (€)", format="%.2f €", alignment="right"),
+                "Tuotto (€)": st.column_config.NumberColumn("Tuotto (€)", format="%+.2f €", alignment="right"),
+                "Muutos %": st.column_config.NumberColumn("Muutos %", format="%+.2f %%", alignment="right"),
+                marketcap_col_key: st.column_config.TextColumn(marketcap_col_key, alignment="right"),
+            }
+        )
+    else:
+        st.warning("Ei tietoja valituille yhtiöille annetulla aikavälillä.")
 
 # =============================================================
 # APUFUNKTIOT (Kuvaajat, Taulukot, KPI-kortit)
 # =============================================================
 def filter_by_date(df, start_date, end_date):
+    if df is None or df.empty or "Date" not in df.columns:
+        return df
+
+    if start_date is None or end_date is None:
+        return df
+
     df_filtered = df[
         (df["Date"] >= pd.to_datetime(start_date)) &
         (df["Date"] <= pd.to_datetime(end_date))
     ].copy()
     return df_filtered
 
-def plot_price_history(df_price, selected_companies, start_date=None, end_date=None):
-
+def plot_price_history(df_price, selected_companies, start_date=None, end_date=None, normalize=False):
     if isinstance(selected_companies, str):
         selected_companies = [selected_companies]
 
@@ -124,53 +151,102 @@ def plot_price_history(df_price, selected_companies, start_date=None, end_date=N
     if df.empty:
         return None
 
-    # Päivämääräsuodatus
-    if start_date:
-        df = df[df["Date"] >= pd.to_datetime(start_date)]
-    if end_date:
-        df = df[df["Date"] <= pd.to_datetime(end_date)]
+    df = df.sort_values("Date")
 
-    fig = px.line(
-        df,
-        x="Date",
-        y="Close",
-        color="Yritys",
-        title="Osakkeiden kurssikehitys"
-    )
+    # --- 1. YKSI YHTIÖ VALITTUNA ---
+    if len(selected_companies) == 1:
+        df["MA50"] = df["Close"].rolling(window=50, min_periods=1).mean()
+        df["MA200"] = df["Close"].rolling(window=200, min_periods=1).mean()
+
+        df = filter_by_date(df, start_date, end_date)
+
+        color_map = {
+            "Sulkemishinta": "#00E5FF",
+            "MA 50": "#FF9F0A",
+            "MA 200": "#FF453A"
+        }
+
+        df_plot = df.rename(columns={
+            "Close": "Sulkemishinta",
+            "MA50": "MA 50",
+            "MA200": "MA 200"
+        })
+
+        fig = px.line(
+            df_plot,
+            x="Date",
+            y=["Sulkemishinta", "MA 50", "MA 200"],
+            title=f"{selected_companies[0]} – Osakekurssi ja liukuvat keskiarvot",
+            labels={"value": "Hinta (€)", "variable": "Käyrä"},
+            color_discrete_map=color_map
+        )
+        
+        fig.update_traces(patch={"line": {"width": 2.5}}, selector={"name": "Sulkemishinta"})
+        fig.update_traces(patch={"line": {"width": 1.5}}, selector={"name": "MA 50"})
+        fig.update_traces(patch={"line": {"width": 1.5}}, selector={"name": "MA 200"})
+
+    # --- 2. USEAMPI YHTIÖ VALITTUNA ---
+    else:
+        df = filter_by_date(df, start_date, end_date)
+
+        if normalize:
+            df = normalize_price_data(df, base_value=100)
+            y_column = "Normalized"
+            title_text = "Osakkeiden suhteellinen tuottokehitys (indeksoitu 100)"
+            yaxis_label = "Kehitys (Alku = 100)"
+            base_line = 100
+        else:
+            y_column = "Close"
+            title_text = "Osakkeiden kurssivertailu (€)"
+            yaxis_label = "Hinta (€)"
+            base_line = None
+
+        fig = px.line(
+            df,
+            x="Date",
+            y=y_column,
+            color="Yritys",
+            title=title_text,
+            labels={y_column: yaxis_label, "Yritys": "Yhtiö"}
+        )
+
+        fig.update_layout(yaxis_title=yaxis_label)
+
+        if base_line is not None:
+            fig.add_hline(y=base_line, line_dash="dash", line_color="gray", opacity=0.7)
 
     fig.update_layout(
         hovermode="x unified",
         xaxis_title="Päivämäärä",
-        yaxis_title="Kurssi (€)",
-        legend_title="Yhtiö",
-        template="plotly_white",
+        legend_title="Tiedot",
+        template="plotly_dark",
         margin=dict(l=20, r=20, t=50, b=20)
     )
     return fig
 
-
-def render_company_kpis(company_name, df_price, df_keyfigures, start_date=None, end_date=None):
-
-    price = df_price[
-        (df_price["Yritys"] == company_name) &
-        (df_price["Date"] >= pd.to_datetime(start_date)) &
-        (df_price["Date"] <= pd.to_datetime(end_date))
-    ].sort_values("Date") if df_price is not None else pd.DataFrame()
-
+def render_company_kpis(company_name, df_price, df_keyfigures):
+    price = df_price[df_price["Yritys"] == company_name].sort_values("Date") if df_price is not None else pd.DataFrame()
     key = df_keyfigures[df_keyfigures["Yritys"] == company_name] if df_keyfigures is not None else pd.DataFrame()
 
     if price.empty:
         st.warning(f"Ei hintadataa yhtiölle {company_name} valitulla aikavälillä.")
         return
 
-    valid_close = price["Close"].dropna()
-    if valid_close.empty:
+    valid_price_df = price.dropna(subset=["Close"])
+    if valid_price_df.empty:
         return
 
+    valid_close = valid_price_df["Close"]
     latest = valid_close.iloc[-1]
     first = valid_close.iloc[0]
     highest = valid_close.max()
     lowest = valid_close.min()
+
+    first_date = valid_price_df["Date"].iloc[0]
+    latest_date = valid_price_df["Date"].iloc[-1]
+
+    first_date_str = first_date.strftime("%d.%m.%Y") if hasattr(first_date, "strftime") else str(first_date)
+    latest_date_str = latest_date.strftime("%d.%m.%Y") if hasattr(latest_date, "strftime") else str(latest_date)
 
     price_change_eur = latest - first
     change_pct = ((latest - first) / first) * 100
@@ -184,51 +260,49 @@ def render_company_kpis(company_name, df_price, df_keyfigures, start_date=None, 
         if key is not None and c in key.columns:
             div_col = c
             break
+
     div_yield = key[div_col].iloc[0] if div_col and not key.empty else None
 
-    ma50 = key["MA50"].iloc[0] if "MA50" in key.columns and not key.empty else None
-    ma200 = key["MA200"].iloc[0] if "MA200" in key.columns and not key.empty else None
-    marketcap = key["Marketcap"].iloc[0] if "Marketcap" in key.columns and not key.empty else None
+    if "Marketcap" in valid_price_df.columns and not valid_price_df["Marketcap"].dropna().empty:
+        marketcap = valid_price_df["Marketcap"].dropna().iloc[-1]
+    else:
+        marketcap = key["Marketcap"].iloc[0] if key is not None and not key.empty and "Marketcap" in key.columns else None
+
     eps = key["Trailing EPS"].iloc[0] if "Trailing EPS" in key.columns and not key.empty else None
 
-    st.markdown("##### 📈 Kurssiyhteenveto")
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Viimeisin kurssi", f"{latest:.2f} €")
-    c2.metric("Ylin kurssi", f"{highest:.2f} €")
-    c3.metric("Alin kurssi", f"{lowest:.2f} €")
-    c4.metric("Tuotto valitulla aikavälillä", f"{price_change_eur:+.2f} €", delta=f"{change_pct:.2f} %")
+    st.subheader(f"📈 Kurssiyhteenveto | Valittu aikaväli: {first_date_str} – {latest_date_str}")
+
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Ylin kurssi", f"{highest:.2f} €")
+    c2.metric("Alin kurssi", f"{lowest:.2f} €")
+    c3.metric("Muutos valitulla aikavälillä", f"{price_change_eur:+.2f} €", delta=f"{change_pct:.2f} %")
+
+    st.write("")
+    st.subheader(f"📊 Tunnusluvut | Päätöskurssi {latest:.2f} € ({latest_date_str})")
+    
+    k1, k2, k3 = st.columns(3)
+    k1.metric("P/E (Trailing)", "-" if pd.isna(pe) else f"{pe:.2f}")
+    k2.metric("P/S (Trailing)", "-" if pd.isna(ps) else f"{ps:.2f}")
+    k3.metric("P/B", "-" if pd.isna(pb) else f"{pb:.2f}")
 
     st.write("")
 
-    st.markdown("##### 📊 Valuaatio & Osinko")
-    k1, k2, k3, k4 = st.columns(4)
-    k1.metric("P/E (Trailing)", "-" if pd.isna(pe) else f"{pe:.2f}")
-    k2.metric("P/S (Trailing)", "-" if pd.isna(ps) else f"{ps:.2f}")
+    m1, m2, m3 = st.columns(3)
+    m1.metric("EPS (Trailing)", "-" if pd.isna(eps) else f"{eps:.2f} €")
 
     if pd.notna(div_yield):
         div_text = f"{div_yield * 100:.2f} %" if div_yield < 1 else f"{div_yield:.2f} %"
     else:
         div_text = "-"
-    k3.metric("Osinko %", div_text)
+    m2.metric("Osinko %", div_text)
 
     if pd.notna(marketcap):
         marketcap_text = f"{marketcap/1000:.2f} mrd €" if marketcap >= 1000 else f"{marketcap:.0f} M€"
     else:
         marketcap_text = "-"
-    k4.metric("Markkina-arvo", marketcap_text)
-
-    st.write("")
-
-    st.markdown("##### 🔍 Muut tunnusluvut")
-    m1, m2, m3, m4 = st.columns(4)
-    m1.metric("P/B", "-" if pd.isna(pb) else f"{pb:.2f}")
-    m2.metric("MA50", "-" if pd.isna(ma50) else f"{ma50:.2f} €")
-    m3.metric("MA200", "-" if pd.isna(ma200) else f"{ma200:.2f} €")
-    m4.metric("EPS (Trailing)", "-" if pd.isna(eps) else f"{eps:.2f} €")
-
+    m3.metric("Markkina-arvo", marketcap_text)
 
 def render_quarterly_analysis(company_name, df_quarters):
-
     if df_quarters is None or df_quarters.empty:
         st.info("Kvartaalidataa ei ole ladattu.")
         return
@@ -258,50 +332,37 @@ def render_quarterly_analysis(company_name, df_quarters):
         y=metric,
         color=metric,
         text_auto=".2f",
-        title=f"{company_name} – {metric} kvartaaleittain",
         color_continuous_scale="Blues"
     )
 
     fig.update_layout(
+        title="",
         xaxis_title="Kvarttaali",
         yaxis_title=f"{metric} ({'€' if metric == 'EPS' else 'M€'})",
         template="plotly_white",
         coloraxis_showscale=False,
-        margin=dict(l=20, r=20, t=50, b=20)
+        margin=dict(l=20, r=20, t=10, b=20)
     )
-
-    # --- Gradientti väripalkkia varten ---
-    values = company[metric].fillna(0)
-
-    import plotly.colors as pc
-    blues = pc.sequential.Blues
-
-    sorted_values = values.sort_values()
-    norm = (sorted_values - sorted_values.min()) / (sorted_values.max() - sorted_values.min() + 1e-9)
-    colors_sorted = [blues[int(n * (len(blues) - 1))] for n in norm]
-
-    gradient = f"linear-gradient(to right, {', '.join(colors_sorted)})"
-
-    color_bar = f"""
-    <div style="
-        width: 600px;
-        height: 100px;
-        background: {gradient};
-        border-radius: 4px;
-    "></div>
-    """
 
     st.markdown(
         f"""
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-            <h3 style="margin: 0;">{company_name} – {metric} kvartaaleittain</h3>
-            <div style="display: flex; align-items: center; gap: 10px;">
-                {color_bar}
-                
-                    Vaaleampi väri = alempi tulos, tummempi väri = suurempi tulos
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px; margin-bottom: 10px;">
+            <h3 style="margin: 0; font-size: 1.3rem;">{company_name} – {metric} kvartaaleittain</h3>
+            <div style="display: flex; align-items: center; gap: 15px;">
+                <div style="
+                    width: 250px;
+                    height: 14px;
+                    background: linear-gradient(to right, #e0f2fe, #0284c7, #030712);
+                    border-radius: 4px;
+                "></div>
+                <span style="font-size: 0.82rem; color: #6b7280; font-family: monospace;">
+                    Vaaleampi = alempi tulos, tummempi = suurempi tulos
+                </span>
+            </div>
+        </div>
         """,
-        unsafe_allow_html=True )
-
+        unsafe_allow_html=True
+    )
 
     st.plotly_chart(fig, use_container_width=True)
 
@@ -317,55 +378,65 @@ def render_quarterly_analysis(company_name, df_quarters):
 
     st.dataframe(display, use_container_width=True, hide_index=True)
 
-
 def create_comparison_table(
-    df_price,
-    df_keyfigures,
-    df_info,
-    selected_companies,
-    sort_by="Muutos %",
-    ascending=False,
-    start_date=None,
+    df_price, 
+    df_keyfigures, 
+    df_info, 
+    selected_companies, 
+    start_date=None, 
     end_date=None
 ):
-
     rows = []
     if isinstance(selected_companies, str):
         selected_companies = [selected_companies]
 
-    for company in selected_companies:
+    global_latest_date = None
+    global_first_date = None
 
-        prices = df_price[
-            (df_price["Yritys"] == company) &
-            (df_price["Date"] >= pd.to_datetime(start_date)) &
-            (df_price["Date"] <= pd.to_datetime(end_date))
-        ].sort_values("Date") if df_price is not None else pd.DataFrame()
+    for company in selected_companies:
+        prices = df_price[df_price["Yritys"] == company] if df_price is not None else pd.DataFrame()
+
+        if start_date is not None and end_date is not None and not prices.empty:
+            prices = filter_by_date(prices, start_date, end_date)
+
+        prices = prices.sort_values("Date") if not prices.empty else pd.DataFrame()
 
         if prices.empty:
             continue
 
-        valid_prices = prices["Close"].dropna()
+        valid_prices = prices.dropna(subset=["Close"])
         if valid_prices.empty:
             continue
 
-        info = df_info[df_info["Yritys"] == company] if df_info is not None and not df_info.empty else pd.DataFrame()
-        kf = df_keyfigures[df_keyfigures["Yritys"] == company] if df_keyfigures is not None and not df_keyfigures.empty else pd.DataFrame()
+        valid_close = valid_prices["Close"]
+        start_price = valid_close.iloc[0]
+        end_price = valid_close.iloc[-1]
 
-        start_price = valid_prices.iloc[0]
-        end_price = valid_prices.iloc[-1]
+        high = valid_close.max()
+        low = valid_close.min()
 
-        high = valid_prices.max()
-        low = valid_prices.min()
+        first_date = valid_prices["Date"].iloc[0]
+        latest_date = valid_prices["Date"].iloc[-1]
+
+        if global_first_date is None or first_date < global_first_date:
+            global_first_date = first_date
+        if global_latest_date is None or latest_date > global_latest_date:
+            global_latest_date = latest_date
 
         price_change_eur = end_price - start_price
         change_pct = ((end_price - start_price) / start_price) * 100
+
+        info = df_info[df_info["Yritys"] == company] if df_info is not None and not df_info.empty else pd.DataFrame()
+        kf = df_keyfigures[df_keyfigures["Yritys"] == company] if df_keyfigures is not None and not df_keyfigures.empty else pd.DataFrame()
 
         sector = "-"
         if not info.empty and "Sektori" in info.columns:
             sector = info.iloc[0]["Sektori"]
 
         marketcap = None
-        if not kf.empty and "Marketcap" in kf.columns:
+        if "Marketcap" in prices.columns and not prices["Marketcap"].dropna().empty:
+            marketcap = prices["Marketcap"].dropna().iloc[-1]
+        elif not kf.empty and "Marketcap" in kf.columns:
             marketcap = kf.iloc[0]["Marketcap"]
 
         if pd.notnull(marketcap):
@@ -376,22 +447,26 @@ def create_comparison_table(
         rows.append({
             "Yhtiö": company,
             "Toimiala": sector,
-            "Viimeisin (€)": round(end_price, 2),
-            "Ylin (€)": round(high, 2),
-            "Alin (€)": round(low, 2),
-            "Tuotto (€)": round(price_change_eur, 2),
-            "Muutos %": round(change_pct, 2),
-            "Markkina-arvo": marketcap_text,
-            "_raw_mcap": marketcap if pd.notnull(marketcap) else 0
+            "Viimeisin (€)": end_price,
+            "Ylin (€)": high,
+            "Alin (€)": low,
+            "Tuotto (€)": price_change_eur,
+            "Muutos %": change_pct,
+            "Markkina-arvo": marketcap_text
         })
 
+    first_date_str = global_first_date.strftime("%d.%m.%Y") if global_first_date and hasattr(global_first_date, "strftime") else ""
+    latest_date_str = global_latest_date.strftime("%d.%m.%Y") if global_latest_date and hasattr(global_latest_date, "strftime") else ""
+
+    viimeisin_col_title = f"Viimeisin (€) ({latest_date_str})" if latest_date_str else "Viimeisin (€)"
+    marketcap_col_title = f"Markkina-arvo ({latest_date_str})" if latest_date_str else "Markkina-arvo"
+
     table = pd.DataFrame(rows)
+
     if not table.empty:
-        if sort_by == "Markkina-arvo":
-            table = table.sort_values("_raw_mcap", ascending=ascending)
-        elif sort_by in table.columns:
-            table = table.sort_values(sort_by, ascending=ascending)
-        table = table.drop(columns=["_raw_mcap"])
+        table = table.rename(columns={
+            "Viimeisin (€)": viimeisin_col_title,
+            "Markkina-arvo": marketcap_col_title
+        })
 
-    return table
-
+    return table, latest_date_str, first_date_str
