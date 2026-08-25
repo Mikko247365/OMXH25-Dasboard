@@ -219,4 +219,6 @@ def update_quarterly_csv(companies, path="Kvarttaalidata.csv"):
 if __name__ == "__main__":
     updated_quarters = update_quarterly_csv(COMPANIES, "Kvarttaalidata.csv")
     print(updated_quarters.tail())
+
+    
     

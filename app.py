@@ -61,6 +61,9 @@ st.markdown("""
     <p style="color: #666; font-size: 18px; margin-top: 5px;">
         Yhtiökohtaiset analyysit, vertailut ja kvartaalitulokset yhdellä silmäyksellä.
     </p>
+    <p style="color: #666; font-size: 18px; margin-top: 5px;">
+    Tiedot perustuvat Yfinance kirjastosta ladattuihin tietoihin. HUOM! Data voi päivittyä viiveellä.
+    </p>
 </div>
 """, unsafe_allow_html=True)
 
@@ -114,7 +117,7 @@ st.subheader("📅 Valitse aikaväli kurssikehitykselle")
 if mode == "Päivämäärä":
     start_date = st.date_input(
         "Alkupäivä",
-        value=TODAY,
+        value=MIN_DATE,
         min_value=MIN_DATE,
         max_value=TODAY
     )
