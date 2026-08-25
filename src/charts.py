@@ -36,7 +36,8 @@ def render_single_company_section(
     st.divider()
 
     df_prices_filtered = filter_by_date(df_prices, start_date, end_date)
-    render_company_kpis(selected_company, df_prices_filtered, df_keyfigures)
+    # Välitetään funktiolle sekä koko data että suodatettu data
+    render_company_kpis(selected_company, df_prices, df_keyfigures, df_prices_filtered)
 
     st.divider()
 
@@ -104,7 +105,7 @@ def render_company_comparison_section(
     if not table_df.empty:
         col_names = table_df.columns.tolist()
         viimeisin_col_key = next((c for c in col_names if "Viimeisin" in c), "Viimeisin (€)")
-        marketcap_col_key = next((c for c in col_names if "Markkina-arvo" in c), "Markkina-arvo")
+        marketcap_col_key = next((c for c in col_names if "Markkina-arvo" in c), "Markkina-arvo (mrd €)")
 
         st.dataframe(
             table_df,
@@ -118,7 +119,7 @@ def render_company_comparison_section(
                 "Alin (€)": st.column_config.NumberColumn("Alin (€)", format="%.2f €", alignment="right"),
                 "Tuotto (€)": st.column_config.NumberColumn("Tuotto (€)", format="%+.2f €", alignment="right"),
                 "Muutos %": st.column_config.NumberColumn("Muutos %", format="%+.2f %%", alignment="right"),
-                marketcap_col_key: st.column_config.TextColumn(marketcap_col_key, alignment="right"),
+                marketcap_col_key: st.column_config.NumberColumn(marketcap_col_key, format="%.2f mrd €", alignment="right"),
             }
         )
     else:
@@ -224,32 +225,53 @@ def plot_price_history(df_price, selected_companies, start_date=None, end_date=N
     )
     return fig
 
-def render_company_kpis(company_name, df_price, df_keyfigures):
-    price = df_price[df_price["Yritys"] == company_name].sort_values("Date") if df_price is not None else pd.DataFrame()
-    key = df_keyfigures[df_keyfigures["Yritys"] == company_name] if df_keyfigures is not None else pd.DataFrame()
-
-    if price.empty:
-        st.warning(f"Ei hintadataa yhtiölle {company_name} valitulla aikavälillä.")
+def render_company_kpis(company_name, df_price_all, df_keyfigures, df_price_filtered=None):
+    # 1. Alempi otsikko ja markkina-arvo: käytetään AINA koko datajoukon tuoreinta riviä
+    price_full = df_price_all[df_price_all["Yritys"] == company_name].sort_values("Date") if df_price_all is not None else pd.DataFrame()
+    
+    if price_full.empty:
+        st.warning(f"Ei hintadataa yhtiölle {company_name}.")
         return
 
-    valid_price_df = price.dropna(subset=["Close"])
+    valid_price_full = price_full.dropna(subset=["Close"])
+    if valid_price_full.empty:
+        return
+
+    absolute_latest = valid_price_full.iloc[-1]
+    latest_close = absolute_latest["Close"]
+    absolute_latest_date = absolute_latest["Date"]
+    latest_date_str = absolute_latest_date.strftime("%d.%m.%Y") if hasattr(absolute_latest_date, "strftime") else str(absolute_latest_date)
+
+    if "Marketcap" in absolute_latest and pd.notna(absolute_latest["Marketcap"]):
+        marketcap = absolute_latest["Marketcap"]
+    elif "Marketcap" in valid_price_full.columns and not valid_price_full["Marketcap"].dropna().empty:
+        marketcap = valid_price_full["Marketcap"].dropna().iloc[-1]
+    else:
+        key_temp = df_keyfigures[df_keyfigures["Yritys"] == company_name] if df_keyfigures is not None else pd.DataFrame()
+        marketcap = key_temp["Marketcap"].iloc[0] if not key_temp.empty and "Marketcap" in key_temp.columns else None
+
+    # 2. Ylempi otsikko ja kortit: elävät valitun aikavälin mukaan (df_price_filtered)
+    df_use = df_price_filtered if df_price_filtered is not None and not df_price_filtered.empty else price_full
+    price_filtered = df_use[df_use["Yritys"] == company_name].sort_values("Date")
+    valid_price_df = price_filtered.dropna(subset=["Close"])
+
     if valid_price_df.empty:
-        return
+        valid_price_df = valid_price_full
 
-    valid_close = valid_price_df["Close"]
-    latest = valid_close.iloc[-1]
-    first = valid_close.iloc[0]
-    highest = valid_close.max()
-    lowest = valid_close.min()
+    first = valid_price_df["Close"].iloc[0]
+    highest = valid_price_df["Close"].max()
+    lowest = valid_price_df["Close"].min()
 
     first_date = valid_price_df["Date"].iloc[0]
-    latest_date = valid_price_df["Date"].iloc[-1]
+    filtered_latest_date = valid_price_df["Date"].iloc[-1]
 
     first_date_str = first_date.strftime("%d.%m.%Y") if hasattr(first_date, "strftime") else str(first_date)
-    latest_date_str = latest_date.strftime("%d.%m.%Y") if hasattr(latest_date, "strftime") else str(latest_date)
+    filtered_latest_date_str = filtered_latest_date.strftime("%d.%m.%Y") if hasattr(filtered_latest_date, "strftime") else str(filtered_latest_date)
 
-    price_change_eur = latest - first
-    change_pct = ((latest - first) / first) * 100
+    price_change_eur = valid_price_df["Close"].iloc[-1] - first
+    change_pct = ((valid_price_df["Close"].iloc[-1] - first) / first) * 100
+
+    key = df_keyfigures[df_keyfigures["Yritys"] == company_name] if df_keyfigures is not None else pd.DataFrame()
 
     pe = key["Trailing P/E"].iloc[0] if "Trailing P/E" in key.columns and not key.empty else None
     pb = key["P/B"].iloc[0] if "P/B" in key.columns and not key.empty else None
@@ -262,15 +284,10 @@ def render_company_kpis(company_name, df_price, df_keyfigures):
             break
 
     div_yield = key[div_col].iloc[0] if div_col and not key.empty else None
-
-    if "Marketcap" in valid_price_df.columns and not valid_price_df["Marketcap"].dropna().empty:
-        marketcap = valid_price_df["Marketcap"].dropna().iloc[-1]
-    else:
-        marketcap = key["Marketcap"].iloc[0] if key is not None and not key.empty and "Marketcap" in key.columns else None
-
     eps = key["Trailing EPS"].iloc[0] if "Trailing EPS" in key.columns and not key.empty else None
 
-    st.subheader(f"📈 Kurssiyhteenveto | Valittu aikaväli: {first_date_str} – {latest_date_str}")
+    # --- UI ---
+    st.subheader(f"📈 Kurssiyhteenveto | Valittu aikaväli: {first_date_str} – {filtered_latest_date_str}")
 
     c1, c2, c3 = st.columns(3)
     c1.metric("Ylin kurssi", f"{highest:.2f} €")
@@ -278,7 +295,9 @@ def render_company_kpis(company_name, df_price, df_keyfigures):
     c3.metric("Muutos valitulla aikavälillä", f"{price_change_eur:+.2f} €", delta=f"{change_pct:.2f} %")
 
     st.write("")
-    st.subheader(f"📊 Tunnusluvut | Päätöskurssi {latest:.2f} € ({latest_date_str})")
+    
+    # Alempi otsikko lukittuna tuoreimmalla päivällä ja päätöskurssilla
+    st.subheader(f"📊 Tunnusluvut | Päätöskurssi {latest_close:.2f} € ({latest_date_str})")
     
     k1, k2, k3 = st.columns(3)
     k1.metric("P/E (Trailing)", "-" if pd.isna(pe) else f"{pe:.2f}")
@@ -439,10 +458,11 @@ def create_comparison_table(
         elif not kf.empty and "Marketcap" in kf.columns:
             marketcap = kf.iloc[0]["Marketcap"]
 
+        # Skaalataan suoraan miljardeiksi, jotta luku pysyy pienenä (esim. 58.76) ja lajittelu toimii
         if pd.notnull(marketcap):
-            marketcap_text = f"{marketcap/1000:.2f} mrd €" if marketcap >= 1000 else f"{marketcap:.0f} M€"
+            marketcap_val = float(marketcap) / 1000 if float(marketcap) >= 1000 else float(marketcap)
         else:
-            marketcap_text = "-"
+            marketcap_val = None
 
         rows.append({
             "Yhtiö": company,
@@ -452,14 +472,15 @@ def create_comparison_table(
             "Alin (€)": low,
             "Tuotto (€)": price_change_eur,
             "Muutos %": change_pct,
-            "Markkina-arvo": marketcap_text
+            "Markkina-arvo": marketcap_val
         })
 
     first_date_str = global_first_date.strftime("%d.%m.%Y") if global_first_date and hasattr(global_first_date, "strftime") else ""
     latest_date_str = global_latest_date.strftime("%d.%m.%Y") if global_latest_date and hasattr(global_latest_date, "strftime") else ""
 
-    viimeisin_col_title = f"Viimeisin (€) ({latest_date_str})" if latest_date_str else "Viimeisin (€)"
-    marketcap_col_title = f"Markkina-arvo ({latest_date_str})" if latest_date_str else "Markkina-arvo"
+    # Lyhyet otsikot taulukkoon
+    viimeisin_col_title = "Viimeisin (€)"
+    marketcap_col_title = "Markkina-arvo (mrd €)"
 
     table = pd.DataFrame(rows)
 
